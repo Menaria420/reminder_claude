@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ThemeContext } from '../../App';
 
 const ReminderListScreen = ({ navigation }) => {
+  const { isDarkMode } = useContext(ThemeContext);
   const [reminders, setReminders] = useState([]);
   const [filteredReminders, setFilteredReminders] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -23,17 +25,28 @@ const ReminderListScreen = ({ navigation }) => {
     try {
       const savedReminders = await AsyncStorage.getItem('reminders');
       if (savedReminders) {
-        setReminders(JSON.parse(savedReminders));
+        try {
+          const parsed = JSON.parse(savedReminders);
+          if (Array.isArray(parsed)) {
+            setReminders(parsed);
+          } else {
+            console.warn('Invalid reminders data format');
+            setReminders([]);
+          }
+        } catch (parseError) {
+          console.error('Error parsing reminders JSON:', parseError);
+          setReminders([]);
+        }
       }
     } catch (error) {
-      console.error('Error loading reminders:', error);
+      console.error('Error loading reminders from storage:', error);
+      setReminders([]);
     }
   };
 
   const filterReminders = () => {
     let filtered = [...reminders];
 
-    // Apply search filter
     if (searchQuery) {
       filtered = filtered.filter(
         (reminder) =>
@@ -42,7 +55,6 @@ const ReminderListScreen = ({ navigation }) => {
       );
     }
 
-    // Apply type filter
     if (selectedFilter !== 'all') {
       filtered = filtered.filter((reminder) => reminder.type === selectedFilter);
     }
@@ -79,66 +91,100 @@ const ReminderListScreen = ({ navigation }) => {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          const updatedReminders = reminders.filter((r) => r.id !== id);
-          setReminders(updatedReminders);
-          await AsyncStorage.setItem('reminders', JSON.stringify(updatedReminders));
+          try {
+            const updatedReminders = reminders.filter((r) => r.id !== id);
+            setReminders(updatedReminders);
+            await AsyncStorage.setItem('reminders', JSON.stringify(updatedReminders));
+          } catch (error) {
+            console.error('Error deleting reminder:', error);
+            Alert.alert('Error', 'Failed to delete reminder.');
+          }
         },
       },
     ]);
   };
 
   const toggleReminder = async (id) => {
-    const updatedReminders = reminders.map((reminder) =>
-      reminder.id === id ? { ...reminder, isActive: !reminder.isActive } : reminder
-    );
-    setReminders(updatedReminders);
-    await AsyncStorage.setItem('reminders', JSON.stringify(updatedReminders));
+    try {
+      const updatedReminders = reminders.map((reminder) =>
+        reminder.id === id ? { ...reminder, isActive: !reminder.isActive } : reminder
+      );
+      setReminders(updatedReminders);
+      await AsyncStorage.setItem('reminders', JSON.stringify(updatedReminders));
+    } catch (error) {
+      console.error('Error toggling reminder:', error);
+      Alert.alert('Error', 'Failed to update reminder.');
+    }
   };
 
   const renderReminderItem = ({ item }) => {
     const colors = getReminderColor(item.type);
+    const priorityColors = {
+      low: '#6B7280',
+      normal: '#3B82F6',
+      high: '#F59E0B',
+      urgent: '#EF4444'
+    };
 
     return (
       <TouchableOpacity
-        style={[styles.reminderCard, !item.isActive && styles.reminderCardInactive]}
+        style={[styles.reminderCard, !item.isActive && styles.reminderCardInactive, isDarkMode && styles.reminderCardDark]}
         activeOpacity={0.9}
       >
-        <LinearGradient colors={colors} style={styles.reminderIcon}>
-          <Icon name={getReminderIcon(item.type)} size={24} color="white" />
-        </LinearGradient>
-
-        <View style={styles.reminderContent}>
-          <Text style={[styles.reminderTitle, !item.isActive && styles.textInactive]}>
-            {item.title}
-          </Text>
-          {item.description && (
-            <Text style={[styles.reminderDescription, !item.isActive && styles.textInactive]}>
-              {item.description}
+        <View style={styles.cardHeader}>
+          <LinearGradient colors={colors} style={styles.reminderIcon}>
+            <Icon name={getReminderIcon(item.type)} size={20} color="white" />
+          </LinearGradient>
+          <View style={styles.headerInfo}>
+            <Text style={[styles.reminderTitle, !item.isActive && styles.textInactive, isDarkMode && styles.reminderTitleDark]}>
+              {item.title}
             </Text>
-          )}
-          <View style={styles.reminderMeta}>
-            <View style={styles.metaChip}>
-              <Icon name="label" size={14} color="#6B7280" />
-              <Text style={styles.metaText}>{item.category}</Text>
+            <View style={styles.typeRow}>
+              <Text style={[styles.reminderType, isDarkMode && styles.reminderTypeDark]}>{item.type}</Text>
+              <View style={[styles.priorityDot, { backgroundColor: priorityColors[item.priority] }]} />
+              <Text style={[styles.priorityText, isDarkMode && styles.priorityTextDark]}>{item.priority}</Text>
             </View>
-            <View style={styles.metaChip}>
-              <Icon name="flag" size={14} color="#6B7280" />
-              <Text style={styles.metaText}>{item.priority}</Text>
-            </View>
+          </View>
+          <View style={styles.statusBadge}>
+            <View style={[styles.statusDot, { backgroundColor: item.isActive ? '#10B981' : '#9CA3AF' }]} />
           </View>
         </View>
 
-        <View style={styles.reminderActions}>
-          <TouchableOpacity style={styles.actionButton} onPress={() => toggleReminder(item.id)}>
-            <Icon
-              name={item.isActive ? 'toggle-on' : 'toggle-off'}
-              size={32}
-              color={item.isActive ? '#10B981' : '#9CA3AF'}
-            />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={() => deleteReminder(item.id)}>
-            <Icon name="delete-outline" size={24} color="#EF4444" />
-          </TouchableOpacity>
+        {item.description && (
+          <Text style={[styles.reminderDescription, !item.isActive && styles.textInactive, isDarkMode && styles.reminderDescriptionDark]}>
+            {item.description}
+          </Text>
+        )}
+
+        <View style={styles.cardFooter}>
+          <View style={styles.metaInfo}>
+            <View style={[styles.metaChip, isDarkMode && styles.metaChipDark]}>
+              <Icon name="label" size={12} color="#6B7280" />
+              <Text style={[styles.metaText, isDarkMode && styles.metaTextDark]}>{item.category}</Text>
+            </View>
+            <View style={[styles.metaChip, isDarkMode && styles.metaChipDark]}>
+              <Icon name="schedule" size={12} color="#6B7280" />
+              <Text style={[styles.metaText, isDarkMode && styles.metaTextDark]}>Daily</Text>
+            </View>
+          </View>
+          <View style={styles.cardActions}>
+            <TouchableOpacity 
+              style={[styles.actionBtn, styles.toggleBtn]} 
+              onPress={() => toggleReminder(item.id)}
+            >
+              <Icon
+                name={item.isActive ? 'pause' : 'play-arrow'}
+                size={18}
+                color={item.isActive ? '#F59E0B' : '#10B981'}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.actionBtn, styles.deleteBtn]} 
+              onPress={() => deleteReminder(item.id)}
+            >
+              <Icon name="delete-outline" size={18} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
         </View>
       </TouchableOpacity>
     );
@@ -154,25 +200,25 @@ const ReminderListScreen = ({ navigation }) => {
   ];
 
   return (
-    <SafeAreaView style={styles.container}>
-      <LinearGradient colors={['#667EEA', '#764BA2']} style={styles.header}>
+    <SafeAreaView style={[styles.container, isDarkMode && styles.containerDark]}>
+      <LinearGradient colors={isDarkMode ? ['#1a1a2e', '#16213e'] : ['#667EEA', '#764BA2']} style={styles.header}>
         <View style={styles.headerContent}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Icon name="arrow-back" size={24} color="white" />
+          <TouchableOpacity onPress={() => navigation.navigate('Home')} style={styles.logoButton}>
+            <Icon name="event-note" size={28} color="white" />
+            <Text style={styles.logoText}>Reminders</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>My Reminders</Text>
           <TouchableOpacity style={styles.menuButton}>
-            <Icon name="more-vert" size={24} color="white" />
+            <Icon name="menu" size={24} color="white" />
           </TouchableOpacity>
         </View>
 
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
+        <View style={[styles.searchContainer, isDarkMode && styles.searchContainerDark]}>
           <Icon name="search" size={20} color="#9CA3AF" />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, isDarkMode && styles.searchInputDark]}
             placeholder="Search reminders..."
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={isDarkMode ? '#6B7280' : '#9CA3AF'}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
@@ -183,7 +229,6 @@ const ReminderListScreen = ({ navigation }) => {
           )}
         </View>
 
-        {/* Filter Chips */}
         <FlatList
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -213,7 +258,6 @@ const ReminderListScreen = ({ navigation }) => {
         />
       </LinearGradient>
 
-      {/* Reminders List */}
       <FlatList
         data={filteredReminders}
         renderItem={renderReminderItem}
@@ -222,8 +266,8 @@ const ReminderListScreen = ({ navigation }) => {
         ListEmptyComponent={() => (
           <View style={styles.emptyState}>
             <Icon name="search-off" size={64} color="#CBD5E1" />
-            <Text style={styles.emptyTitle}>No Reminders Found</Text>
-            <Text style={styles.emptySubtitle}>
+            <Text style={[styles.emptyTitle, isDarkMode && styles.emptyTitleDark]}>No Reminders Found</Text>
+            <Text style={[styles.emptySubtitle, isDarkMode && styles.emptySubtitleDark]}>
               {searchQuery ? 'Try adjusting your search' : 'Create your first reminder'}
             </Text>
             {!searchQuery && (
@@ -240,12 +284,30 @@ const ReminderListScreen = ({ navigation }) => {
         )}
       />
 
-      {/* Floating Action Button */}
-      <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('CreateReminder')}>
-        <LinearGradient colors={['#667EEA', '#764BA2']} style={styles.fabGradient}>
-          <Icon name="add" size={28} color="white" />
-        </LinearGradient>
-      </TouchableOpacity>
+      <View style={[styles.footerNav, isDarkMode && styles.footerNavDark]}>
+        <TouchableOpacity style={styles.footerNavItem} onPress={() => navigation.navigate('Home')}>
+          <Icon name="home" size={24} color="#9CA3AF" />
+          <Text style={[styles.footerNavLabel, { color: '#9CA3AF' }]}>Home</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.footerNavItem}
+          onPress={() => navigation.navigate('CreateReminder')}
+        >
+          <Icon name="add-circle" size={24} color="#9CA3AF" />
+          <Text style={[styles.footerNavLabel, { color: '#9CA3AF' }]}>Add</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.footerNavItem}
+          onPress={() => navigation.navigate('ReminderList')}
+        >
+          <Icon name="list" size={24} color="#667EEA" />
+          <Text style={[styles.footerNavLabel, { color: '#667EEA' }]}>Reminders</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.footerNavItem}>
+          <Icon name="settings" size={24} color="#9CA3AF" />
+          <Text style={[styles.footerNavLabel, { color: '#9CA3AF' }]}>Settings</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 };
@@ -254,6 +316,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F3F4F6',
+  },
+  containerDark: {
+    backgroundColor: '#0a0e27',
   },
   header: {
     paddingTop: 20,
@@ -266,8 +331,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  backButton: {
-    padding: 8,
+  logoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  logoText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: 'white',
+    marginLeft: 6,
+  },
+  menuButton: {
+    width: 44,
+    height: 44,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 20,
@@ -275,9 +359,6 @@ const styles = StyleSheet.create({
     color: 'white',
     flex: 1,
     textAlign: 'center',
-  },
-  menuButton: {
-    padding: 8,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -288,11 +369,19 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginBottom: 16,
   },
+  searchContainerDark: {
+    backgroundColor: '#1a1f3a',
+    borderColor: '#3a4560',
+    borderWidth: 1,
+  },
   searchInput: {
     flex: 1,
     fontSize: 16,
     color: '#111827',
     marginLeft: 8,
+  },
+  searchInputDark: {
+    color: '#ffffff',
   },
   filterContainer: {
     marginBottom: -8,
@@ -320,71 +409,153 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 20,
-    paddingBottom: 100,
+    paddingBottom: 80,
   },
   reminderCard: {
-    flexDirection: 'row',
     backgroundColor: 'white',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
-    elevation: 2,
+    elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    borderLeftWidth: 4,
+    borderLeftColor: '#667EEA',
+  },
+  reminderCardDark: {
+    backgroundColor: '#1a1f3a',
+    borderColor: '#3a4560',
+    borderWidth: 1,
+    borderLeftColor: '#667EEA',
   },
   reminderCardInactive: {
     opacity: 0.6,
+    borderLeftColor: '#9CA3AF',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
   },
   reminderIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  reminderContent: {
+  headerInfo: {
     flex: 1,
     marginLeft: 12,
   },
   reminderTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#111827',
     marginBottom: 4,
+  },
+  reminderTitleDark: {
+    color: '#ffffff',
+  },
+  typeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reminderType: {
+    fontSize: 12,
+    color: '#6B7280',
+    textTransform: 'capitalize',
+    fontWeight: '500',
+  },
+  reminderTypeDark: {
+    color: '#9CA3AF',
+  },
+  priorityDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginHorizontal: 8,
+  },
+  priorityText: {
+    fontSize: 12,
+    color: '#6B7280',
+    textTransform: 'capitalize',
+    fontWeight: '500',
+  },
+  priorityTextDark: {
+    color: '#9CA3AF',
+  },
+  statusBadge: {
+    alignItems: 'center',
+  },
+  statusDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
   reminderDescription: {
     fontSize: 14,
     color: '#6B7280',
-    marginBottom: 8,
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  reminderDescriptionDark: {
+    color: '#9CA3AF',
   },
   textInactive: {
     color: '#9CA3AF',
   },
-  reminderMeta: {
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  metaInfo: {
     flexDirection: 'row',
     gap: 8,
   },
   metaChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#F8FAFC',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  metaChipDark: {
+    backgroundColor: '#2a2f4a',
+    borderColor: '#3a4560',
   },
   metaText: {
-    fontSize: 12,
-    color: '#6B7280',
+    fontSize: 11,
+    color: '#64748B',
     marginLeft: 4,
     textTransform: 'capitalize',
+    fontWeight: '500',
   },
-  reminderActions: {
+  metaTextDark: {
+    color: '#9CA3AF',
+  },
+  cardActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  actionButton: {
-    padding: 4,
+  toggleBtn: {
+    backgroundColor: '#F0FDF4',
+  },
+  deleteBtn: {
+    backgroundColor: '#FEF2F2',
   },
   emptyState: {
     alignItems: 'center',
@@ -397,11 +568,17 @@ const styles = StyleSheet.create({
     color: '#374151',
     marginTop: 16,
   },
+  emptyTitleDark: {
+    color: '#ffffff',
+  },
   emptySubtitle: {
     fontSize: 16,
     color: '#6B7280',
     marginTop: 8,
     textAlign: 'center',
+  },
+  emptySubtitleDark: {
+    color: '#9CA3AF',
   },
   createButton: {
     marginTop: 24,
@@ -416,22 +593,34 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: 'white',
   },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-  },
-  fabGradient: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
+  footerNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
     alignItems: 'center',
+    backgroundColor: 'white',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    paddingVertical: 8,
     elevation: 8,
-    shadowColor: '#667EEA',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  footerNavDark: {
+    backgroundColor: '#1a1f3a',
+    borderTopColor: '#3a4560',
+  },
+  footerNavItem: {
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  footerNavLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#667EEA',
+    marginTop: 2,
   },
 });
 

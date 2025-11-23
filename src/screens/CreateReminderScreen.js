@@ -19,10 +19,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { ThemeContext } from '../../App';
 
 const { width } = Dimensions.get('window');
 
 const CreateReminderScreen = ({ navigation }) => {
+  const { isDarkMode } = React.useContext(ThemeContext);
   const [currentStep, setCurrentStep] = useState(1);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -120,6 +122,51 @@ const CreateReminderScreen = ({ navigation }) => {
     }
   };
 
+  const getNextTriggerTime = () => {
+    const now = new Date();
+
+    switch (reminderData.type) {
+      case 'hourly': {
+        const next = new Date(now.getTime() + reminderData.hourlyInterval * 60 * 60 * 1000);
+        return next.toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        });
+      }
+      case 'weekly': {
+        const nextTime = reminderData.weeklyTimes[0] || '6:00 AM';
+        return `${reminderData.weeklyDays[0]} at ${nextTime}`;
+      }
+      case '15days': {
+        const next = new Date(reminderData.fifteenDaysTime);
+        return next.toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        });
+      }
+      case 'monthly': {
+        const next = new Date(reminderData.monthlyTime);
+        return `${reminderData.monthlyDate} at ${next.toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        })}`;
+      }
+      case 'custom': {
+        const customTime = reminderData.customSettings.time;
+        return customTime.toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        });
+      }
+      default:
+        return 'Soon';
+    }
+  };
+
   const handleSelectType = (type) => {
     handleVibrate();
     setReminderData({ ...reminderData, type });
@@ -204,12 +251,12 @@ const CreateReminderScreen = ({ navigation }) => {
       setTimeout(() => {
         setShowSuccess(false);
         navigation.navigate('Home', { newReminder: reminderData });
-      }, 2000);
+      }, 4000);
     }, 1500);
   };
 
   const renderStepIndicator = () => (
-    <View style={styles.stepIndicatorContainer}>
+    <View style={[styles.stepIndicatorContainer, isDarkMode && styles.stepIndicatorContainerDark]}>
       {[1, 2, 3].map((step) => (
         <View key={step} style={styles.stepWrapper}>
           <View style={[styles.stepCircle, currentStep >= step && styles.stepCircleActive]}>
@@ -228,9 +275,9 @@ const CreateReminderScreen = ({ navigation }) => {
   const renderStep1 = () => (
     <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
       <View style={styles.inputContainer}>
-        <Text style={styles.label}>Reminder Title *</Text>
+        <Text style={[styles.label, isDarkMode && styles.labelDark]}>Reminder Title *</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, isDarkMode && styles.inputDark]}
           value={reminderData.title}
           onChangeText={(text) => setReminderData({ ...reminderData, title: text })}
           placeholder="e.g., Take medication, Team meeting"
@@ -239,9 +286,9 @@ const CreateReminderScreen = ({ navigation }) => {
       </View>
 
       <View style={styles.inputContainer}>
-        <Text style={styles.label}>Description (Optional)</Text>
+        <Text style={[styles.label, isDarkMode && styles.labelDark]}>Description (Optional)</Text>
         <TextInput
-          style={[styles.input, styles.textArea]}
+          style={[styles.input, isDarkMode && styles.inputDark, styles.textArea]}
           value={reminderData.description}
           onChangeText={(text) => setReminderData({ ...reminderData, description: text })}
           placeholder="Add notes or details..."
@@ -251,11 +298,13 @@ const CreateReminderScreen = ({ navigation }) => {
         />
       </View>
 
-      <Text style={styles.sectionTitle}>Select Reminder Type</Text>
+      <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>
+        Select Reminder Type
+      </Text>
       {reminderTypes.map((type) => (
         <TouchableOpacity
           key={type.id}
-          style={styles.typeCard}
+          style={[styles.typeCard, isDarkMode && styles.typeCardDark]}
           onPress={() => handleSelectType(type.id)}
           activeOpacity={0.8}
         >
@@ -263,8 +312,10 @@ const CreateReminderScreen = ({ navigation }) => {
             <Icon name={type.icon} size={24} color="white" />
           </LinearGradient>
           <View style={styles.typeInfo}>
-            <Text style={styles.typeName}>{type.label}</Text>
-            <Text style={styles.typeDesc}>{type.description}</Text>
+            <Text style={[styles.typeName, isDarkMode && styles.typeNameDark]}>{type.label}</Text>
+            <Text style={[styles.typeDesc, isDarkMode && styles.typeDescDark]}>
+              {type.description}
+            </Text>
           </View>
           <Icon name="chevron-right" size={24} color="#9CA3AF" />
         </TouchableOpacity>
@@ -280,8 +331,10 @@ const CreateReminderScreen = ({ navigation }) => {
         {/* Hourly Configuration */}
         {type === 'hourly' && (
           <>
-            <View style={styles.configCard}>
-              <Text style={styles.configTitle}>Set Hourly Interval</Text>
+            <View style={[styles.configCard, isDarkMode && styles.configCardDark]}>
+              <Text style={[styles.configTitle, isDarkMode && styles.configTitleDark]}>
+                Set Hourly Interval
+              </Text>
               <View style={styles.intervalSelector}>
                 <TouchableOpacity
                   style={styles.intervalButton}
@@ -354,7 +407,9 @@ const CreateReminderScreen = ({ navigation }) => {
         {/* Weekly Configuration */}
         {type === 'weekly' && (
           <>
-            <Text style={styles.configTitle}>Select Days</Text>
+            <Text style={[styles.configTitle, isDarkMode && styles.configTitleDark]}>
+              Select Days
+            </Text>
             <View style={styles.weekDayGrid}>
               {weekDays.map((day) => (
                 <TouchableOpacity
@@ -377,7 +432,9 @@ const CreateReminderScreen = ({ navigation }) => {
               ))}
             </View>
 
-            <Text style={styles.configTitle}>Select Times</Text>
+            <Text style={[styles.configTitle, isDarkMode && styles.configTitleDark]}>
+              Select Times
+            </Text>
             <View style={styles.timeGrid}>
               {quickTimes.map((time) => (
                 <TouchableOpacity
@@ -461,7 +518,9 @@ const CreateReminderScreen = ({ navigation }) => {
         {/* Monthly Configuration */}
         {type === 'monthly' && (
           <>
-            <Text style={styles.configTitle}>Select Date</Text>
+            <Text style={[styles.configTitle, isDarkMode && styles.configTitleDark]}>
+              Select Date
+            </Text>
             <View style={styles.dateGrid}>
               {[...Array(31)].map((_, i) => (
                 <TouchableOpacity
@@ -723,7 +782,9 @@ const CreateReminderScreen = ({ navigation }) => {
 
   const renderStep3 = () => (
     <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-      <Text style={styles.sectionTitle}>Additional Options</Text>
+      <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>
+        Additional Options
+      </Text>
 
       <View style={styles.optionCard}>
         <View style={styles.optionIcon}>
@@ -874,16 +935,17 @@ const CreateReminderScreen = ({ navigation }) => {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, isDarkMode && styles.containerDark]}>
       <LinearGradient colors={['#667EEA', '#764BA2']} style={styles.header}>
         <View style={styles.headerContent}>
-          <TouchableOpacity onPress={handleBack} style={styles.headerButton}>
-            <Icon name={currentStep > 1 ? 'arrow-back' : 'close'} size={24} color="white" />
+          <TouchableOpacity onPress={handleBack} style={styles.logoButton}>
+            <Icon name="event-note" size={28} color="white" />
+            <Text style={styles.logoText}>Reminders</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Create Reminder</Text>
           <TouchableOpacity
             onPress={currentStep === 3 ? handleCreateReminder : handleNext}
-            style={styles.headerButton}
+            style={styles.checkButton}
           >
             <Icon name="check" size={24} color="white" />
           </TouchableOpacity>
@@ -945,6 +1007,10 @@ const CreateReminderScreen = ({ navigation }) => {
             </View>
             <Text style={styles.successTitle}>Success!</Text>
             <Text style={styles.successMessage}>Your reminder has been created</Text>
+            <View style={styles.triggerInfoContainer}>
+              <Icon name="schedule" size={16} color="#667EEA" />
+              <Text style={styles.triggerInfo}>Next: {getNextTriggerTime()}</Text>
+            </View>
           </View>
         </View>
       </Modal>
@@ -957,6 +1023,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F3F4F6',
   },
+  containerDark: {
+    backgroundColor: '#1a1a1a',
+  },
   header: {
     paddingVertical: 20,
     paddingHorizontal: 20,
@@ -966,26 +1035,47 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  headerButton: {
-    padding: 8,
+  logoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  logoText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: 'white',
+    marginLeft: 6,
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: 'white',
+    flex: 1,
+    textAlign: 'center',
+  },
+  checkButton: {
+    padding: 8,
   },
   stepIndicatorContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 20,
-    paddingHorizontal: 40,
+    paddingHorizontal: 20,
     backgroundColor: 'white',
+    width: '100%',
+    alignSelf: 'center',
+  },
+  stepIndicatorContainerDark: {
+    backgroundColor: '#2a2a2a',
   },
   stepWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    justifyContent: 'center',
   },
   stepCircle: {
     width: 32,
@@ -1007,7 +1097,7 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   stepLine: {
-    flex: 1,
+    width: 40,
     height: 2,
     backgroundColor: '#E5E7EB',
     marginHorizontal: 8,
@@ -1031,6 +1121,9 @@ const styles = StyleSheet.create({
     color: '#374151',
     marginBottom: 8,
   },
+  labelDark: {
+    color: '#E5E7EB',
+  },
   input: {
     backgroundColor: 'white',
     borderWidth: 2,
@@ -1041,6 +1134,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#111827',
   },
+  inputDark: {
+    backgroundColor: '#2a2a2a',
+    borderColor: '#444444',
+    color: '#E5E7EB',
+  },
   textArea: {
     minHeight: 100,
     textAlignVertical: 'top',
@@ -1050,6 +1148,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#111827',
     marginBottom: 16,
+  },
+  sectionTitleDark: {
+    color: '#E5E7EB',
   },
   typeCard: {
     flexDirection: 'row',
@@ -1063,6 +1164,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+  },
+  typeCardDark: {
+    backgroundColor: '#2a2a2a',
   },
   typeIcon: {
     width: 48,
@@ -1080,10 +1184,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#111827',
   },
+  typeNameDark: {
+    color: '#E5E7EB',
+  },
   typeDesc: {
     fontSize: 13,
     color: '#6B7280',
     marginTop: 2,
+  },
+  typeDescDark: {
+    color: '#9CA3AF',
   },
   configCard: {
     backgroundColor: 'white',
@@ -1091,11 +1201,17 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 20,
   },
+  configCardDark: {
+    backgroundColor: '#2a2a2a',
+  },
   configTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#111827',
     marginBottom: 16,
+  },
+  configTitleDark: {
+    color: '#E5E7EB',
   },
   intervalSelector: {
     flexDirection: 'row',
@@ -1526,6 +1642,22 @@ const styles = StyleSheet.create({
   successMessage: {
     fontSize: 16,
     color: '#6B7280',
+    marginBottom: 12,
+  },
+  triggerInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  triggerInfo: {
+    fontSize: 14,
+    color: '#667EEA',
+    fontWeight: '600',
+    marginLeft: 6,
   },
 });
 

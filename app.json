@@ -11,15 +11,14 @@
       "resizeMode": "contain",
       "backgroundColor": "#667eea"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.yourcompany.reminderapp",
       "infoPlist": {
         "NSUserNotificationUsageDescription": "This app needs to send you reminder notifications."
-      }
+      },
+      "minimumOsVersion": "13.0"
     },
     "android": {
       "adaptiveIcon": {
@@ -27,15 +26,13 @@
         "backgroundColor": "#667eea"
       },
       "package": "com.yourcompany.reminderapp",
-      "permissions": [
-        "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE",
-        "WAKE_LOCK"
-      ]
+      "permissions": ["RECEIVE_BOOT_COMPLETED", "VIBRATE", "WAKE_LOCK"],
+      "minSdkVersion": 21
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": []
+    "plugins": [],
+    "runtimeVersion": "54.0.0"
   }
 }
