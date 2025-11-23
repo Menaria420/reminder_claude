@@ -2,9 +2,17 @@
 
 A beautiful and feature-rich reminder application built with React Native and Expo, featuring multiple scheduling options including hourly, weekly, 15-day cycles, monthly, and custom reminders.
 
+## how to start
+
+clone app in local
+run npm install
+run "npx expo start -c"
+scan qr in expo go latest version having same wi-fi for app preview
+
 ## ✨ Features
 
 - **5 Reminder Types:**
+
   - ⏰ Hourly - Set reminders to repeat every X hours
   - 📅 Weekly - Choose specific days and times
   - 🔄 15 Days - Unique 15-day cycle reminders
@@ -12,6 +20,7 @@ A beautiful and feature-rich reminder application built with React Native and Ex
   - ⚙️ Custom - Advanced scheduling options
 
 - **Time Selection Methods:**
+
   - Specific times selection
   - Hour interval configuration
 
@@ -29,6 +38,7 @@ A beautiful and feature-rich reminder application built with React Native and Ex
 ## 📋 Prerequisites
 
 Before you begin, ensure you have the following installed:
+
 - Node.js (v14 or higher)
 - npm or Yarn
 - Expo CLI (`npm install -g expo-cli`)
@@ -37,12 +47,14 @@ Before you begin, ensure you have the following installed:
 ## 🚀 Quick Start
 
 1. **Extract the project:**
+
    ```bash
    unzip ReminderApp-ReactNative.zip
    cd ReminderApp-ReactNative
    ```
 
 2. **Install dependencies:**
+
    ```bash
    npm install
    # or
@@ -50,6 +62,7 @@ Before you begin, ensure you have the following installed:
    ```
 
 3. **Start the development server:**
+
    ```bash
    expo start
    # or
@@ -80,7 +93,9 @@ ReminderApp-ReactNative/
 ## 🎨 Customization
 
 ### Changing Colors
+
 Edit the gradient colors in the components:
+
 ```javascript
 // Example in HomeScreen.js
 <LinearGradient
@@ -90,12 +105,15 @@ Edit the gradient colors in the components:
 ```
 
 ### Adding New Reminder Types
+
 1. Add the type to `reminderTypes` array in `CreateReminderScreen.js`
 2. Create a configuration section in `renderStep2()`
 3. Add the icon and color mapping
 
 ### Modifying Categories
+
 Edit the categories array in `CreateReminderScreen.js`:
+
 ```javascript
 const categories = ['Personal', 'Work', 'Health', 'Family', 'Finance', 'Shopping'];
 ```
@@ -111,11 +129,13 @@ const categories = ['Personal', 'Work', 'Health', 'Family', 'Finance', 'Shopping
 ## 📱 Platform-Specific Features
 
 ### iOS
+
 - Native date/time pickers
 - Haptic feedback using Expo Haptics
 - Smooth animations with React Native Reanimated
 
 ### Android
+
 - Material Design date/time pickers
 - Native haptic feedback
 - Elevation shadows for depth
@@ -125,17 +145,20 @@ const categories = ['Personal', 'Work', 'Health', 'Family', 'Finance', 'Shopping
 ### Common Issues
 
 1. **Metro bundler issues:**
+
    ```bash
    expo start -c  # Clear cache
    ```
 
 2. **Dependencies not installing:**
+
    ```bash
    rm -rf node_modules
    npm install
    ```
 
 3. **iOS Simulator not opening:**
+
    - Make sure Xcode is installed
    - Open Xcode > Preferences > Locations > Command Line Tools
 
@@ -146,16 +169,19 @@ const categories = ['Personal', 'Work', 'Health', 'Family', 'Finance', 'Shopping
 ## 🚀 Building for Production
 
 ### For iOS:
+
 ```bash
 expo build:ios
 ```
 
 ### For Android:
+
 ```bash
 expo build:android
 ```
 
 ### For both platforms:
+
 ```bash
 expo build:all
 ```
@@ -163,12 +189,14 @@ expo build:all
 ## 📦 Required Permissions
 
 The app will request the following permissions:
+
 - **Notifications** - To send reminder alerts
 - **Background Tasks** - To schedule reminders
 
 ## 🤝 Contributing
 
 Feel free to modify and enhance this app! Some ideas:
+
 - Add cloud sync with Firebase
 - Implement push notifications
 - Add voice input for reminder creation
@@ -183,6 +211,7 @@ This project is open source and available for personal and commercial use.
 ## 💡 Tips for VS Code
 
 ### Recommended Extensions:
+
 - React Native Tools
 - ES7+ React/Redux/React-Native snippets
 - Prettier - Code formatter
@@ -190,7 +219,9 @@ This project is open source and available for personal and commercial use.
 - Color Highlight
 
 ### Debug Configuration:
+
 Create `.vscode/launch.json`:
+
 ```json
 {
   "version": "0.2.0",
@@ -208,6 +239,7 @@ Create `.vscode/launch.json`:
 ## 🆘 Support
 
 If you encounter any issues:
+
 1. Check the [Expo documentation](https://docs.expo.dev/)
 2. Visit [React Native documentation](https://reactnative.dev/)
 3. Search for issues on Stack Overflow
