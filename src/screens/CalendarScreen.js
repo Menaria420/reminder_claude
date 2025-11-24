@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ThemeContext } from '../../App';
+import { ThemeContext } from '../context/ThemeContext';
 
 const CalendarScreen = ({ navigation }) => {
   const { isDarkMode } = useContext(ThemeContext);
@@ -39,22 +39,22 @@ const CalendarScreen = ({ navigation }) => {
     const startingDayOfWeek = firstDay.getDay();
 
     const days = [];
-    
+
     for (let i = 0; i < startingDayOfWeek; i++) {
       days.push(null);
     }
-    
+
     for (let day = 1; day <= daysInMonth; day++) {
       days.push(new Date(year, month, day));
     }
-    
+
     return days;
   };
 
   const getRemindersForDate = (date) => {
     if (!date) return [];
     const dateStr = date.toDateString();
-    return reminders.filter(reminder => {
+    return reminders.filter((reminder) => {
       const reminderDate = new Date(reminder.createdAt);
       return reminderDate.toDateString() === dateStr && reminder.isActive;
     });
@@ -80,12 +80,14 @@ const CalendarScreen = ({ navigation }) => {
         ]}
         onPress={() => setSelectedDate(date)}
       >
-        <Text style={[
-          styles.dayText,
-          isSelected && styles.selectedDayText,
-          isToday && styles.todayDayText,
-          isDarkMode && styles.dayTextDark,
-        ]}>
+        <Text
+          style={[
+            styles.dayText,
+            isSelected && styles.selectedDayText,
+            isToday && styles.todayDayText,
+            isDarkMode && styles.dayTextDark,
+          ]}
+        >
           {date.getDate()}
         </Text>
         {hasReminders && (
@@ -103,16 +105,32 @@ const CalendarScreen = ({ navigation }) => {
         <Icon name="notifications" size={16} color="#667EEA" />
       </View>
       <View style={styles.reminderContent}>
-        <Text style={[styles.reminderTitle, isDarkMode && styles.reminderTitleDark]}>{item.title}</Text>
-        <Text style={[styles.reminderType, isDarkMode && styles.reminderTypeDark]}>{item.type} • {item.category}</Text>
+        <Text style={[styles.reminderTitle, isDarkMode && styles.reminderTitleDark]}>
+          {item.title}
+        </Text>
+        <Text style={[styles.reminderType, isDarkMode && styles.reminderTypeDark]}>
+          {item.type} • {item.category}
+        </Text>
       </View>
-      <View style={[styles.statusDot, { backgroundColor: item.isActive ? '#10B981' : '#9CA3AF' }]} />
+      <View
+        style={[styles.statusDot, { backgroundColor: item.isActive ? '#10B981' : '#9CA3AF' }]}
+      />
     </View>
   );
 
   const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
 
   const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -120,13 +138,19 @@ const CalendarScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={[styles.container, isDarkMode && styles.containerDark]}>
-      <LinearGradient colors={isDarkMode ? ['#1a1a2e', '#16213e'] : ['#667EEA', '#764BA2']} style={styles.header}>
+      <LinearGradient
+        colors={isDarkMode ? ['#1a1a2e', '#16213e'] : ['#667EEA', '#764BA2']}
+        style={styles.header}
+      >
         <View style={styles.headerContent}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Icon name="arrow-back" size={24} color="white" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Calendar</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('CreateReminder')} style={styles.addButton}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('CreateReminder')}
+            style={styles.addButton}
+          >
             <Icon name="add" size={24} color="white" />
           </TouchableOpacity>
         </View>
@@ -135,18 +159,22 @@ const CalendarScreen = ({ navigation }) => {
       <ScrollView style={styles.content}>
         <View style={styles.monthHeader}>
           <TouchableOpacity
-            onPress={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))}
+            onPress={() =>
+              setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))
+            }
             style={styles.monthButton}
           >
             <Icon name="chevron-left" size={24} color="#667EEA" />
           </TouchableOpacity>
-          
+
           <Text style={[styles.monthTitle, isDarkMode && styles.monthTitleDark]}>
             {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
           </Text>
-          
+
           <TouchableOpacity
-            onPress={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))}
+            onPress={() =>
+              setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))
+            }
             style={styles.monthButton}
           >
             <Icon name="chevron-right" size={24} color="#667EEA" />
@@ -155,8 +183,10 @@ const CalendarScreen = ({ navigation }) => {
 
         <View style={[styles.calendar, isDarkMode && styles.calendarDark]}>
           <View style={styles.weekHeader}>
-            {weekDays.map(day => (
-              <Text key={day} style={[styles.weekDay, isDarkMode && styles.weekDayDark]}>{day}</Text>
+            {weekDays.map((day) => (
+              <Text key={day} style={[styles.weekDay, isDarkMode && styles.weekDayDark]}>
+                {day}
+              </Text>
             ))}
           </View>
 
@@ -171,14 +201,15 @@ const CalendarScreen = ({ navigation }) => {
 
         <View style={[styles.remindersSection, isDarkMode && styles.remindersSectionDark]}>
           <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>
-            Reminders for {selectedDate.toLocaleDateString('en-US', { 
-              weekday: 'long', 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
+            Reminders for{' '}
+            {selectedDate.toLocaleDateString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
             })}
           </Text>
-          
+
           {selectedDateReminders.length > 0 ? (
             <FlatList
               data={selectedDateReminders}
@@ -189,7 +220,9 @@ const CalendarScreen = ({ navigation }) => {
           ) : (
             <View style={styles.noReminders}>
               <Icon name="event-available" size={48} color="#CBD5E1" />
-              <Text style={[styles.noRemindersText, isDarkMode && styles.noRemindersTextDark]}>No reminders for this date</Text>
+              <Text style={[styles.noRemindersText, isDarkMode && styles.noRemindersTextDark]}>
+                No reminders for this date
+              </Text>
             </View>
           )}
         </View>

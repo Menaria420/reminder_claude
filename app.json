@@ -26,13 +26,28 @@
         "backgroundColor": "#667eea"
       },
       "package": "com.yourcompany.reminderapp",
-      "permissions": ["RECEIVE_BOOT_COMPLETED", "VIBRATE", "WAKE_LOCK"],
+      "permissions": [
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "WAKE_LOCK",
+        "POST_NOTIFICATIONS",
+        "SCHEDULE_EXACT_ALARM"
+      ],
       "minSdkVersion": 21
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [],
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/adaptive-icon.png",
+          "color": "#667eea",
+          "sounds": []
+        }
+      ]
+    ],
     "runtimeVersion": "54.0.0"
   }
 }

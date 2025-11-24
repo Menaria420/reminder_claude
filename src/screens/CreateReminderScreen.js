@@ -19,7 +19,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { ThemeContext } from '../../App';
+import { ThemeContext } from '../context/ThemeContext';
+import { CATEGORIES } from '../constants/categories';
+import RingtoneSelector from '../components/RingtoneSelector';
+import NotificationService from '../utils/NotificationService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
@@ -30,15 +34,24 @@ const CreateReminderScreen = ({ navigation }) => {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showRingtoneSelector, setShowRingtoneSelector] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
   const [reminderData, setReminderData] = useState({
+    category: '',
     title: '',
     description: '',
+    medicineName: '',
+    dosage: '',
+    exerciseName: '',
+    duration: '',
+    habitName: '',
+    goal: '',
     type: '',
     hourlyInterval: 1,
+    hourlyStartTime: new Date(),
     weeklyDays: [],
     weeklyTimes: [],
     timeMethod: 'specific',
@@ -46,18 +59,11 @@ const CreateReminderScreen = ({ navigation }) => {
     fifteenDaysTime: new Date(),
     monthlyDate: 1,
     monthlyTime: new Date(),
-    customSettings: {
-      year: new Date().getFullYear(),
-      month: 1,
-      date: 1,
-      time: new Date(),
-      yearRepeat: 'specific',
-      monthRepeat: 'specific',
-      dateRepeat: 'specific',
-    },
+    dateRepeat: 'specific',
     notificationSound: 'default',
-    category: 'personal',
+    ringTone: 'default',
     priority: 'normal',
+    goal: '',
   });
 
   const reminderTypes = [
@@ -100,17 +106,30 @@ const CreateReminderScreen = ({ navigation }) => {
 
   const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const quickTimes = ['6:00 AM', '9:00 AM', '12:00 PM', '3:00 PM', '6:00 PM', '9:00 PM'];
+  const [isReady, setIsReady] = useState(false);
 
   React.useEffect(() => {
+    // Small delay to ensure layout is ready before showing content
+    // This prevents the "flash" of unstyled/default content
+    const timer = setTimeout(() => {
+      setIsReady(true);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  React.useEffect(() => {
+    fadeAnim.setValue(0);
+    slideAnim.setValue(50);
+
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 500,
+        duration: 400,
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 500,
+        duration: 400,
         useNativeDriver: true,
       }),
     ]).start();
@@ -123,54 +142,80 @@ const CreateReminderScreen = ({ navigation }) => {
   };
 
   const getNextTriggerTime = () => {
-    const now = new Date();
+    try {
+      const now = new Date();
 
-    switch (reminderData.type) {
-      case 'hourly': {
-        const next = new Date(now.getTime() + reminderData.hourlyInterval * 60 * 60 * 1000);
-        return next.toLocaleTimeString('en-US', {
+      if (reminderData.type === 'hourly') {
+        const startTime = new Date(reminderData.hourlyStartTime);
+        while (startTime < now) {
+          startTime.setHours(startTime.getHours() + (reminderData.hourlyInterval || 1));
+        }
+        return startTime.toLocaleString([], {
+          month: 'short',
+          day: 'numeric',
           hour: '2-digit',
           minute: '2-digit',
-          hour12: true,
         });
       }
-      case 'weekly': {
-        const nextTime = reminderData.weeklyTimes[0] || '6:00 AM';
-        return `${reminderData.weeklyDays[0]} at ${nextTime}`;
+
+      if (reminderData.type === 'weekly' && reminderData.weeklyTimes.length > 0) {
+        const firstTime = reminderData.weeklyTimes[0];
+        const [time, period] = firstTime.split(' ');
+        const [hours, minutes] = time.split(':').map(Number);
+        let hour24 = hours;
+        if (period === 'PM' && hours !== 12) hour24 += 12;
+        if (period === 'AM' && hours === 12) hour24 = 0;
+
+        return `${reminderData.weeklyDays[0] || 'Day'} at ${firstTime}`;
       }
-      case '15days': {
-        const next = new Date(reminderData.fifteenDaysTime);
-        return next.toLocaleTimeString('en-US', {
+
+      if (reminderData.type === '15days') {
+        return reminderData.fifteenDaysStart.toLocaleString([], {
+          month: 'short',
+          day: 'numeric',
           hour: '2-digit',
           minute: '2-digit',
-          hour12: true,
         });
       }
-      case 'monthly': {
-        const next = new Date(reminderData.monthlyTime);
-        return `${reminderData.monthlyDate} at ${next.toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true,
-        })}`;
+
+      if (reminderData.type === 'monthly') {
+        return `${reminderData.monthlyDate}${getDaySuffix(reminderData.monthlyDate)} of each month`;
       }
-      case 'custom': {
-        const customTime = reminderData.customSettings.time;
-        return customTime.toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true,
-        });
-      }
-      default:
-        return 'Soon';
+
+      return 'Soon';
+    } catch (error) {
+      return 'Soon';
     }
+  };
+
+  const getDaySuffix = (day) => {
+    if (day > 3 && day < 21) return 'th';
+    switch (day % 10) {
+      case 1:
+        return 'st';
+      case 2:
+        return 'nd';
+      case 3:
+        return 'rd';
+      default:
+        return 'th';
+    }
+  };
+
+  const handleSelectCategory = (category) => {
+    handleVibrate();
+    setReminderData({ ...reminderData, category: category.id });
+    setCurrentStep(2);
   };
 
   const handleSelectType = (type) => {
     handleVibrate();
     setReminderData({ ...reminderData, type });
-    setCurrentStep(2);
+    // If we are in a specific flow that needs type selection, move to next step
+    // Otherwise, this might be part of the form
+    if (currentStep === 2 && reminderData.category === 'others') {
+      setCurrentStep(3);
+    }
   };
 
   const toggleWeekday = (day) => {
@@ -191,13 +236,43 @@ const CreateReminderScreen = ({ navigation }) => {
 
   const validateStep = () => {
     if (currentStep === 1) {
-      if (!reminderData.title.trim()) {
-        Alert.alert('Required Field', 'Please enter a reminder title');
+      if (!reminderData.category) {
+        Alert.alert('Required Field', 'Please select a category');
         return false;
       }
-      if (!reminderData.type) {
-        Alert.alert('Required Field', 'Please select a reminder type');
-        return false;
+    }
+
+    if (currentStep === 2) {
+      const { category } = reminderData;
+      if (category === 'medication') {
+        if (!reminderData.medicineName.trim()) {
+          Alert.alert('Required Field', 'Please enter medicine name');
+          return false;
+        }
+        if (!reminderData.type) {
+          // Frequency
+          Alert.alert('Required Field', 'Please select frequency');
+          return false;
+        }
+      } else if (category === 'fitness') {
+        if (!reminderData.exerciseName.trim()) {
+          Alert.alert('Required Field', 'Please enter exercise name');
+          return false;
+        }
+      } else if (category === 'habits') {
+        if (!reminderData.habitName.trim()) {
+          Alert.alert('Required Field', 'Please enter habit name');
+          return false;
+        }
+      } else if (category === 'others') {
+        if (!reminderData.title.trim()) {
+          Alert.alert('Required Field', 'Please enter title');
+          return false;
+        }
+        if (!reminderData.type) {
+          Alert.alert('Required Field', 'Please select reminder type');
+          return false;
+        }
       }
     }
 
@@ -243,16 +318,94 @@ const CreateReminderScreen = ({ navigation }) => {
     handleVibrate();
     setLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      // Create reminder object with unique ID and timestamp
+      const newReminder = {
+        id: `reminder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        ...reminderData,
+        createdAt: new Date().toISOString(),
+        isActive: true,
+      };
+
+      // Get existing reminders from AsyncStorage
+      const existingReminders = await AsyncStorage.getItem('reminders');
+      const reminders = existingReminders ? JSON.parse(existingReminders) : [];
+
+      // Add new reminder
+      reminders.push(newReminder);
+
+      // Save to AsyncStorage
+      await AsyncStorage.setItem('reminders', JSON.stringify(reminders));
+
+      // Create notification if notification system is enabled
+      try {
+        const NotificationManager = require('../utils/NotificationManager').default;
+        const NotificationService = require('../utils/NotificationService').default;
+
+        // Calculate trigger time based on reminder type
+        let triggerTime = new Date();
+
+        if (reminderData.type === 'hourly') {
+          // Use the hourlyStartTime the user selected
+          triggerTime = new Date(reminderData.hourlyStartTime);
+          // If start time is in the past, add interval to get next trigger
+          while (triggerTime < new Date()) {
+            triggerTime.setHours(triggerTime.getHours() + (reminderData.hourlyInterval || 1));
+          }
+        } else if (reminderData.type === 'weekly' && reminderData.weeklyTimes.length > 0) {
+          // Parse string time like "6:00 AM" to proper time
+          const firstTime = reminderData.weeklyTimes[0];
+          const [time, period] = firstTime.split(' ');
+          const [hours, minutes] = time.split(':').map(Number);
+
+          // Convert to 24-hour format
+          let hour24 = hours;
+          if (period === 'PM' && hours !== 12) hour24 += 12;
+          if (period === 'AM' && hours === 12) hour24 = 0;
+
+          triggerTime.setHours(hour24, minutes, 0, 0);
+
+          // If time is in the past today, move to next occurrence
+          if (triggerTime < new Date()) {
+            triggerTime.setDate(triggerTime.getDate() + 1);
+          }
+        } else if (reminderData.type === '15days') {
+          triggerTime = new Date(reminderData.fifteenDaysTime);
+          // Set date to start date
+          triggerTime.setFullYear(reminderData.fifteenDaysStart.getFullYear());
+          triggerTime.setMonth(reminderData.fifteenDaysStart.getMonth());
+          triggerTime.setDate(reminderData.fifteenDaysStart.getDate());
+        } else if (reminderData.type === 'monthly') {
+          triggerTime = new Date(reminderData.monthlyTime);
+          triggerTime.setDate(reminderData.monthlyDate);
+        } else {
+          // Default to 1 hour from now
+          triggerTime.setHours(triggerTime.getHours() + 1);
+        }
+
+        // Create notification record
+        await NotificationManager.createNotification(newReminder, triggerTime);
+
+        // Schedule the notification
+        await NotificationService.scheduleNotification(newReminder, triggerTime);
+      } catch (notifError) {
+        console.log('Notification setup skipped:', notifError.message);
+        // Continue even if notification fails
+      }
+
       setLoading(false);
       setShowSuccess(true);
 
+      // Navigate back after showing success
       setTimeout(() => {
         setShowSuccess(false);
-        navigation.navigate('Home', { newReminder: reminderData });
-      }, 4000);
-    }, 1500);
+        navigation.navigate('Home', { refresh: true });
+      }, 2500);
+    } catch (error) {
+      console.error('Error creating reminder:', error);
+      setLoading(false);
+      Alert.alert('Error', 'Failed to create reminder. Please try again.');
+    }
   };
 
   const renderStepIndicator = () => (
@@ -272,7 +425,230 @@ const CreateReminderScreen = ({ navigation }) => {
     </View>
   );
 
-  const renderStep1 = () => (
+  if (!isReady) {
+    return (
+      <SafeAreaView style={[styles.container, isDarkMode && styles.containerDark]}>
+        <ActivityIndicator size="large" color="#667EEA" style={{ marginTop: 50 }} />
+      </SafeAreaView>
+    );
+  }
+
+  const renderCategorySelection = () => (
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>
+        What do you want to be reminded about?
+      </Text>
+      <View style={styles.categoryGrid}>
+        {CATEGORIES.map((cat) => (
+          <TouchableOpacity
+            key={cat.id}
+            style={[styles.categoryCard, isDarkMode && styles.categoryCardDark]}
+            onPress={() => handleSelectCategory(cat)}
+            activeOpacity={0.8}
+          >
+            <LinearGradient colors={cat.color} style={styles.categoryIcon}>
+              <Icon name={cat.icon} size={28} color="white" />
+            </LinearGradient>
+            <Text style={[styles.categoryLabel, isDarkMode && styles.categoryLabelDark]}>
+              {cat.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </Animated.View>
+  );
+
+  const renderMedicationForm = () => (
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <View style={styles.inputContainer}>
+        <Text style={[styles.label, isDarkMode && styles.labelDark]}>Medicine Name *</Text>
+        <TextInput
+          style={[styles.input, isDarkMode && styles.inputDark]}
+          value={reminderData.medicineName}
+          onChangeText={(text) =>
+            setReminderData({ ...reminderData, medicineName: text, title: text })
+          }
+          placeholder="e.g., Aspirin, Vitamin D"
+          placeholderTextColor="#9CA3AF"
+        />
+      </View>
+      <View style={styles.inputContainer}>
+        <Text style={[styles.label, isDarkMode && styles.labelDark]}>Dosage (Optional)</Text>
+        <TextInput
+          style={[styles.input, isDarkMode && styles.inputDark]}
+          value={reminderData.dosage}
+          onChangeText={(text) =>
+            setReminderData({ ...reminderData, dosage: text, description: `Dosage: ${text}` })
+          }
+          placeholder="e.g., 500mg, 1 tablet"
+          placeholderTextColor="#9CA3AF"
+        />
+      </View>
+      <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>Frequency</Text>
+      {/* Reusing reminderTypes but filtering or simplifying if needed */}
+      {reminderTypes.slice(0, 2).map(
+        (
+          type // Showing Hourly and Weekly for now
+        ) => (
+          <TouchableOpacity
+            key={type.id}
+            style={[
+              styles.typeCard,
+              isDarkMode && styles.typeCardDark,
+              reminderData.type === type.id && styles.typeCardActive,
+            ]}
+            onPress={() => setReminderData({ ...reminderData, type: type.id })}
+          >
+            <LinearGradient colors={type.color} style={styles.typeIcon}>
+              <Icon name={type.icon} size={24} color="white" />
+            </LinearGradient>
+            <View style={styles.typeInfo}>
+              <Text style={[styles.typeName, isDarkMode && styles.typeNameDark]}>{type.label}</Text>
+              <Text style={[styles.typeDesc, isDarkMode && styles.typeDescDark]}>
+                {type.description}
+              </Text>
+            </View>
+            {reminderData.type === type.id && (
+              <Icon name="check-circle" size={24} color="#10B981" />
+            )}
+          </TouchableOpacity>
+        )
+      )}
+      <TouchableOpacity style={styles.continueButton} onPress={handleNext}>
+        <LinearGradient colors={['#667EEA', '#764BA2']} style={styles.gradientButton}>
+          <Text style={styles.continueButtonText}>Next</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+
+  const renderFitnessForm = () => (
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <View style={styles.inputContainer}>
+        <Text style={[styles.label, isDarkMode && styles.labelDark]}>Exercise Name *</Text>
+        <TextInput
+          style={[styles.input, isDarkMode && styles.inputDark]}
+          value={reminderData.exerciseName}
+          onChangeText={(text) =>
+            setReminderData({ ...reminderData, exerciseName: text, title: text })
+          }
+          placeholder="e.g., Morning Run, Yoga"
+          placeholderTextColor="#9CA3AF"
+        />
+      </View>
+      <View style={styles.inputContainer}>
+        <Text style={[styles.label, isDarkMode && styles.labelDark]}>Duration (Optional)</Text>
+        <TextInput
+          style={[styles.input, isDarkMode && styles.inputDark]}
+          value={reminderData.duration}
+          onChangeText={(text) =>
+            setReminderData({ ...reminderData, duration: text, description: `Duration: ${text}` })
+          }
+          placeholder="e.g., 30 mins"
+          placeholderTextColor="#9CA3AF"
+        />
+      </View>
+      <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>Frequency</Text>
+      {reminderTypes.slice(1, 2).map(
+        (
+          type // Weekly only for fitness for now
+        ) => (
+          <TouchableOpacity
+            key={type.id}
+            style={[
+              styles.typeCard,
+              isDarkMode && styles.typeCardDark,
+              reminderData.type === type.id && styles.typeCardActive,
+            ]}
+            onPress={() => setReminderData({ ...reminderData, type: type.id })}
+          >
+            <LinearGradient colors={type.color} style={styles.typeIcon}>
+              <Icon name={type.icon} size={24} color="white" />
+            </LinearGradient>
+            <View style={styles.typeInfo}>
+              <Text style={[styles.typeName, isDarkMode && styles.typeNameDark]}>{type.label}</Text>
+              <Text style={[styles.typeDesc, isDarkMode && styles.typeDescDark]}>
+                {type.description}
+              </Text>
+            </View>
+            {reminderData.type === type.id && (
+              <Icon name="check-circle" size={24} color="#10B981" />
+            )}
+          </TouchableOpacity>
+        )
+      )}
+      <TouchableOpacity style={styles.continueButton} onPress={handleNext}>
+        <LinearGradient colors={['#667EEA', '#764BA2']} style={styles.gradientButton}>
+          <Text style={styles.continueButtonText}>Next</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+
+  const renderHabitForm = () => (
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <View style={styles.inputContainer}>
+        <Text style={[styles.label, isDarkMode && styles.labelDark]}>Habit Name *</Text>
+        <TextInput
+          style={[styles.input, isDarkMode && styles.inputDark]}
+          value={reminderData.habitName}
+          onChangeText={(text) =>
+            setReminderData({ ...reminderData, habitName: text, title: text })
+          }
+          placeholder="e.g., Drink Water, Read Book"
+          placeholderTextColor="#9CA3AF"
+        />
+      </View>
+      <View style={styles.inputContainer}>
+        <Text style={[styles.label, isDarkMode && styles.labelDark]}>Goal (Optional)</Text>
+        <TextInput
+          style={[styles.input, isDarkMode && styles.inputDark]}
+          value={reminderData.goal}
+          onChangeText={(text) =>
+            setReminderData({ ...reminderData, goal: text, description: `Goal: ${text}` })
+          }
+          placeholder="e.g., 2 liters, 10 pages"
+          placeholderTextColor="#9CA3AF"
+        />
+      </View>
+      <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>Frequency</Text>
+      {reminderTypes.slice(0, 2).map(
+        (
+          type // Hourly/Weekly
+        ) => (
+          <TouchableOpacity
+            key={type.id}
+            style={[
+              styles.typeCard,
+              isDarkMode && styles.typeCardDark,
+              reminderData.type === type.id && styles.typeCardActive,
+            ]}
+            onPress={() => setReminderData({ ...reminderData, type: type.id })}
+          >
+            <LinearGradient colors={type.color} style={styles.typeIcon}>
+              <Icon name={type.icon} size={24} color="white" />
+            </LinearGradient>
+            <View style={styles.typeInfo}>
+              <Text style={[styles.typeName, isDarkMode && styles.typeNameDark]}>{type.label}</Text>
+              <Text style={[styles.typeDesc, isDarkMode && styles.typeDescDark]}>
+                {type.description}
+              </Text>
+            </View>
+            {reminderData.type === type.id && (
+              <Icon name="check-circle" size={24} color="#10B981" />
+            )}
+          </TouchableOpacity>
+        )
+      )}
+      <TouchableOpacity style={styles.continueButton} onPress={handleNext}>
+        <LinearGradient colors={['#667EEA', '#764BA2']} style={styles.gradientButton}>
+          <Text style={styles.continueButtonText}>Next</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+
+  const renderGeneralForm = () => (
     <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
       <View style={styles.inputContainer}>
         <Text style={[styles.label, isDarkMode && styles.labelDark]}>Reminder Title *</Text>
@@ -280,7 +656,7 @@ const CreateReminderScreen = ({ navigation }) => {
           style={[styles.input, isDarkMode && styles.inputDark]}
           value={reminderData.title}
           onChangeText={(text) => setReminderData({ ...reminderData, title: text })}
-          placeholder="e.g., Take medication, Team meeting"
+          placeholder="e.g., Team meeting"
           placeholderTextColor="#9CA3AF"
         />
       </View>
@@ -323,6 +699,27 @@ const CreateReminderScreen = ({ navigation }) => {
     </Animated.View>
   );
 
+  const renderStepContent = () => {
+    if (currentStep === 1) return renderCategorySelection();
+
+    const { category } = reminderData;
+    if (currentStep === 2) {
+      switch (category) {
+        case 'medication':
+          return renderMedicationForm();
+        case 'fitness':
+          return renderFitnessForm();
+        case 'habits':
+          return renderHabitForm();
+        default:
+          return renderGeneralForm();
+      }
+    }
+    if (currentStep === 3) return renderStep2(); // The old Step 2 (Time configuration)
+    if (currentStep === 4) return renderStep3(); // The old Step 3 (Options)
+    return null;
+  };
+
   const renderStep2 = () => {
     const { type } = reminderData;
 
@@ -337,7 +734,7 @@ const CreateReminderScreen = ({ navigation }) => {
               </Text>
               <View style={styles.intervalSelector}>
                 <TouchableOpacity
-                  style={styles.intervalButton}
+                  style={[styles.intervalButton, isDarkMode && styles.intervalButtonDark]}
                   onPress={() => {
                     handleVibrate();
                     setReminderData({
@@ -355,7 +752,7 @@ const CreateReminderScreen = ({ navigation }) => {
                   </Text>
                 </View>
                 <TouchableOpacity
-                  style={styles.intervalButton}
+                  style={[styles.intervalButton, isDarkMode && styles.intervalButtonDark]}
                   onPress={() => {
                     handleVibrate();
                     setReminderData({
@@ -396,10 +793,19 @@ const CreateReminderScreen = ({ navigation }) => {
 
             <TouchableOpacity
               style={styles.timePickerButton}
-              onPress={() => setShowTimePicker(true)}
+              onPress={() => {
+                handleVibrate();
+                setShowTimePicker(true);
+              }}
             >
               <Icon name="access-time" size={20} color="#667EEA" />
-              <Text style={styles.timePickerText}>Set Start Time</Text>
+              <Text style={styles.timePickerText}>
+                Start Time:{' '}
+                {reminderData.hourlyStartTime.toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </Text>
             </TouchableOpacity>
           </>
         )}
@@ -786,39 +1192,22 @@ const CreateReminderScreen = ({ navigation }) => {
         Additional Options
       </Text>
 
-      <View style={styles.optionCard}>
+      <TouchableOpacity style={styles.optionCard} onPress={() => setShowRingtoneSelector(true)}>
         <View style={styles.optionIcon}>
-          <Icon name="volume-up" size={20} color="#667EEA" />
+          <Icon name="music-note" size={20} color="#667EEA" />
         </View>
         <View style={styles.optionContent}>
-          <Text style={styles.optionTitle}>Notification Sound</Text>
-          <View style={styles.soundOptions}>
-            {['Default', 'Bell', 'Chime'].map((sound) => (
-              <TouchableOpacity
-                key={sound}
-                style={[
-                  styles.soundChip,
-                  reminderData.notificationSound === sound.toLowerCase() && styles.soundChipActive,
-                ]}
-                onPress={() => {
-                  handleVibrate();
-                  setReminderData({ ...reminderData, notificationSound: sound.toLowerCase() });
-                }}
-              >
-                <Text
-                  style={[
-                    styles.soundChipText,
-                    reminderData.notificationSound === sound.toLowerCase() &&
-                      styles.soundChipTextActive,
-                  ]}
-                >
-                  {sound}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          <Text style={styles.optionTitle}>Ringtone</Text>
+          <View style={styles.ringtoneDisplay}>
+            <Text style={styles.ringtoneValue}>
+              {reminderData.ringTone === 'default'
+                ? 'Use Default'
+                : reminderData.ringTone.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+            </Text>
+            <Icon name="chevron-right" size={20} color="#9CA3AF" />
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
 
       <View style={styles.optionCard}>
         <View style={styles.optionIcon}>
@@ -898,23 +1287,37 @@ const CreateReminderScreen = ({ navigation }) => {
         </View>
       </View>
 
-      <View style={styles.summaryCard}>
-        <Text style={styles.summaryTitle}>Reminder Summary</Text>
+      <View style={[styles.summaryCard, isDarkMode && styles.summaryCardDark]}>
+        <Text style={[styles.summaryTitle, isDarkMode && styles.summaryTitleDark]}>
+          Reminder Summary
+        </Text>
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Title:</Text>
-          <Text style={styles.summaryValue}>{reminderData.title || 'Not set'}</Text>
+          <Text style={[styles.summaryLabel, isDarkMode && styles.summaryLabelDark]}>Title:</Text>
+          <Text style={[styles.summaryValue, isDarkMode && styles.summaryValueDark]}>
+            {reminderData.title || 'Not set'}
+          </Text>
         </View>
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Type:</Text>
-          <Text style={styles.summaryValue}>{reminderData.type || 'Not set'}</Text>
+          <Text style={[styles.summaryLabel, isDarkMode && styles.summaryLabelDark]}>Type:</Text>
+          <Text style={[styles.summaryValue, isDarkMode && styles.summaryValueDark]}>
+            {reminderData.type || 'Not set'}
+          </Text>
         </View>
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Category:</Text>
-          <Text style={styles.summaryValue}>{reminderData.category}</Text>
+          <Text style={[styles.summaryLabel, isDarkMode && styles.summaryLabelDark]}>
+            Category:
+          </Text>
+          <Text style={[styles.summaryValue, isDarkMode && styles.summaryValueDark]}>
+            {reminderData.category}
+          </Text>
         </View>
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Priority:</Text>
-          <Text style={styles.summaryValue}>{reminderData.priority}</Text>
+          <Text style={[styles.summaryLabel, isDarkMode && styles.summaryLabelDark]}>
+            Priority:
+          </Text>
+          <Text style={[styles.summaryValue, isDarkMode && styles.summaryValueDark]}>
+            {reminderData.priority}
+          </Text>
         </View>
       </View>
 
@@ -939,8 +1342,8 @@ const CreateReminderScreen = ({ navigation }) => {
       <LinearGradient colors={['#667EEA', '#764BA2']} style={styles.header}>
         <View style={styles.headerContent}>
           <TouchableOpacity onPress={handleBack} style={styles.logoButton}>
-            <Icon name="event-note" size={28} color="white" />
-            <Text style={styles.logoText}>Reminders</Text>
+            <Icon name="arrow-back" size={24} color="white" />
+            <Text style={styles.logoText}>Back</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Create Reminder</Text>
           <TouchableOpacity
@@ -962,9 +1365,7 @@ const CreateReminderScreen = ({ navigation }) => {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          {currentStep === 1 && renderStep1()}
-          {currentStep === 2 && renderStep2()}
-          {currentStep === 3 && renderStep3()}
+          {renderStepContent()}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -986,13 +1387,25 @@ const CreateReminderScreen = ({ navigation }) => {
       {/* Time Picker Modal */}
       {showTimePicker && (
         <DateTimePicker
-          value={reminderData.fifteenDaysTime}
+          value={
+            reminderData.type === 'hourly'
+              ? reminderData.hourlyStartTime
+              : reminderData.type === '15days'
+              ? reminderData.fifteenDaysTime
+              : reminderData.monthlyTime
+          }
           mode="time"
           display="default"
           onChange={(event, selectedTime) => {
             setShowTimePicker(false);
             if (selectedTime) {
-              setReminderData({ ...reminderData, fifteenDaysTime: selectedTime });
+              if (reminderData.type === 'hourly') {
+                setReminderData({ ...reminderData, hourlyStartTime: selectedTime });
+              } else if (reminderData.type === '15days') {
+                setReminderData({ ...reminderData, fifteenDaysTime: selectedTime });
+              } else if (reminderData.type === 'monthly') {
+                setReminderData({ ...reminderData, monthlyTime: selectedTime });
+              }
             }
           }}
         />
@@ -1001,19 +1414,36 @@ const CreateReminderScreen = ({ navigation }) => {
       {/* Success Modal */}
       <Modal transparent visible={showSuccess} animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.successModal}>
+          <View style={[styles.successModal, isDarkMode && styles.successModalDark]}>
             <View style={styles.successIcon}>
               <Icon name="check-circle" size={60} color="#10B981" />
             </View>
-            <Text style={styles.successTitle}>Success!</Text>
-            <Text style={styles.successMessage}>Your reminder has been created</Text>
+            <Text style={[styles.successTitle, isDarkMode && styles.successTitleDark]}>
+              Success!
+            </Text>
+            <Text style={[styles.successMessage, isDarkMode && styles.successMessageDark]}>
+              Your reminder has been created
+            </Text>
             <View style={styles.triggerInfoContainer}>
               <Icon name="schedule" size={16} color="#667EEA" />
-              <Text style={styles.triggerInfo}>Next: {getNextTriggerTime()}</Text>
+              <Text style={[styles.triggerInfo, isDarkMode && styles.triggerInfoDark]}>
+                Next: {getNextTriggerTime()}
+              </Text>
             </View>
           </View>
         </View>
       </Modal>
+
+      {/* Ringtone Selector Modal */}
+      <RingtoneSelector
+        visible={showRingtoneSelector}
+        onClose={() => setShowRingtoneSelector(false)}
+        selectedRingtone={reminderData.ringTone}
+        onSelect={(ringtoneId) => {
+          setReminderData({ ...reminderData, ringTone: ringtoneId });
+          handleVibrate();
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -1504,27 +1934,50 @@ const styles = StyleSheet.create({
   optionCard: {
     flexDirection: 'row',
     backgroundColor: 'white',
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 16,
     marginBottom: 12,
+  },
+  intervalButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  intervalButtonDark: {
+    backgroundColor: '#2a2f4a',
+    borderColor: '#3a4560',
+    borderWidth: 1,
   },
   optionIcon: {
     width: 40,
     height: 40,
-    backgroundColor: '#F3F4F6',
     borderRadius: 10,
+    backgroundColor: '#F0F4FF',
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 12,
   },
   optionContent: {
     flex: 1,
-    marginLeft: 12,
   },
   optionTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
     color: '#111827',
     marginBottom: 8,
+  },
+  ringtoneDisplay: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  ringtoneValue: {
+    fontSize: 14,
+    color: '#667EEA',
+    fontWeight: '600',
   },
   soundOptions: {
     flexDirection: 'row',
@@ -1617,11 +2070,32 @@ const styles = StyleSheet.create({
     color: '#1E40AF',
     textTransform: 'capitalize',
   },
+  summaryCardDark: {
+    backgroundColor: '#1a1f3a',
+    borderColor: '#3a4560',
+    borderWidth: 1,
+  },
+  summaryTitleDark: {
+    color: '#8B9EFF',
+  },
+  summaryLabelDark: {
+    color: '#9CA3AF',
+  },
+  summaryValueDark: {
+    color: '#8B9EFF',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9999,
+    elevation: 9999,
   },
   successModal: {
     backgroundColor: 'white',
@@ -1658,6 +2132,61 @@ const styles = StyleSheet.create({
     color: '#667EEA',
     fontWeight: '600',
     marginLeft: 6,
+  },
+  successModalDark: {
+    backgroundColor: '#1a1f3a',
+    borderColor: '#3a4560',
+    borderWidth: 1,
+  },
+  successTitleDark: {
+    color: '#ffffff',
+  },
+  successMessageDark: {
+    color: '#9CA3AF',
+  },
+  triggerInfoDark: {
+    color: '#8B9EFF',
+  },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  categoryCard: {
+    width: '48%',
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    alignItems: 'center',
+    // Reduced elevation and added overflow hidden to prevent artifacts
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    overflow: 'hidden',
+  },
+  categoryCardDark: {
+    backgroundColor: '#2a2a2a',
+  },
+  categoryIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  categoryLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    textAlign: 'center',
+  },
+  categoryLabelDark: {
+    color: '#E5E7EB',
   },
 });
 

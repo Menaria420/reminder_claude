@@ -8,18 +8,22 @@ import {
   Dimensions,
   FlatList,
   Alert,
+  Modal,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import Svg, { Circle, Path } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ThemeContext } from '../../App';
+import { ThemeContext } from '../context/ThemeContext';
+import { AuthContext } from '../context/AuthContext';
 
 const { width } = Dimensions.get('window');
 
 const HomeScreen = ({ navigation, route }) => {
   const { isDarkMode, toggleTheme } = React.useContext(ThemeContext);
+  const { logout } = React.useContext(AuthContext);
   const [reminders, setReminders] = useState([]);
   const [greeting, setGreeting] = useState('');
   const [todayReminders, setTodayReminders] = useState([]);
@@ -27,6 +31,7 @@ const HomeScreen = ({ navigation, route }) => {
   const [overdueReminders, setOverdueReminders] = useState([]);
   const [showMenu, setShowMenu] = useState(false);
   const [selectedChartSection, setSelectedChartSection] = useState(null);
+  const [activeTab, setActiveTab] = useState('today');
 
   useEffect(() => {
     loadReminders();
@@ -46,10 +51,6 @@ const HomeScreen = ({ navigation, route }) => {
       saveReminders(updatedReminders);
     }
   }, [route.params?.newReminder]);
-
-  useEffect(() => {
-    categorizeReminders();
-  }, [reminders]);
 
   const loadReminders = async () => {
     try {
@@ -90,30 +91,6 @@ const HomeScreen = ({ navigation, route }) => {
     if (hour < 12) setGreeting('Good Morning');
     else if (hour < 18) setGreeting('Good Afternoon');
     else setGreeting('Good Evening');
-  };
-
-  const categorizeReminders = () => {
-    const today = new Date();
-    const todayStr = today.toDateString();
-
-    const todayItems = reminders.filter((r) => {
-      const reminderDate = new Date(r.createdAt);
-      return reminderDate.toDateString() === todayStr && r.isActive;
-    });
-
-    const upcomingItems = reminders.filter((r) => {
-      const reminderDate = new Date(r.createdAt);
-      return reminderDate > today && r.isActive;
-    });
-
-    const overdueItems = reminders.filter((r) => {
-      const reminderDate = new Date(r.createdAt);
-      return reminderDate < today && r.isActive;
-    });
-
-    setTodayReminders(todayItems);
-    setUpcomingReminders(upcomingItems);
-    setOverdueReminders(overdueItems);
   };
 
   const toggleReminder = (id) => {
@@ -161,6 +138,18 @@ const HomeScreen = ({ navigation, route }) => {
     return colors[type] || ['#6B7280', '#4B5563'];
   };
 
+  const getFilteredReminders = () => {
+    // For Home screen, display all reminders sorted by creation date (newest first)
+    if (activeTab === 'today') {
+      // Show all reminders (ignoring date filter) to ensure visibility
+      return [...reminders].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
+    // Recents (last 5 added)
+    return [...reminders].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5);
+  };
+
+  const displayedReminders = getFilteredReminders();
+
   const renderOverviewChart = () => {
     const activeCount = reminders.filter((r) => r.isActive).length;
     const inactiveCount = reminders.filter((r) => !r.isActive).length;
@@ -183,7 +172,7 @@ const HomeScreen = ({ navigation, route }) => {
     ];
 
     // Filter data to show only items with count > 0
-    const filteredData = allData.filter(item => item.count > 0);
+    const filteredData = allData.filter((item) => item.count > 0);
     const totalWithData = filteredData.reduce((sum, item) => sum + item.count, 0);
 
     return (
@@ -197,7 +186,7 @@ const HomeScreen = ({ navigation, route }) => {
                 {filteredData.map((item, index) => {
                   // Calculate angle for each segment
                   let currentAngle = filteredData.slice(0, index).reduce((sum, prev) => {
-                    return sum + ((prev.count / totalWithData) * 360);
+                    return sum + (prev.count / totalWithData) * 360;
                   }, 0);
 
                   const segmentAngle = (item.count / totalWithData) * 360;
@@ -277,7 +266,7 @@ const HomeScreen = ({ navigation, route }) => {
   };
 
   const renderReminderItem = ({ item }) => {
-    const colors = getReminderColor(item.type);
+    const colors = getReminderColor(item.type || 'custom');
 
     return (
       <TouchableOpacity
@@ -286,7 +275,7 @@ const HomeScreen = ({ navigation, route }) => {
         activeOpacity={0.9}
       >
         <LinearGradient colors={colors} style={styles.reminderIcon}>
-          <Icon name={getReminderIcon(item.type)} size={18} color="white" />
+          <Icon name={getReminderIcon(item.type || 'custom')} size={18} color="white" />
         </LinearGradient>
 
         <View style={styles.reminderContent}>
@@ -294,7 +283,7 @@ const HomeScreen = ({ navigation, route }) => {
             {item.title}
           </Text>
           <Text style={[styles.reminderType, isDarkMode && styles.reminderTypeDark]}>
-            {item.type} • {item.category}
+            {item.type || 'Custom'} • {item.category || 'General'}
           </Text>
         </View>
 
@@ -317,135 +306,165 @@ const HomeScreen = ({ navigation, route }) => {
   return (
     <SafeAreaView style={[styles.container, isDarkMode && styles.containerDark]}>
       <View style={styles.mainContent}>
+        {/* Fixed Navbar */}
+        <LinearGradient
+          colors={isDarkMode ? ['#1a1a2e', '#16213e'] : ['#667EEA', '#764BA2']}
+          style={styles.navbar}
+        >
+          <View style={styles.headerContent}>
+            <TouchableOpacity onPress={() => navigation.navigate('Home')} style={styles.logoButton}>
+              <LinearGradient colors={['#FFD700', '#FFA500']} style={styles.appLogo}>
+                <Icon name="notifications" size={20} color="white" />
+              </LinearGradient>
+              <Text style={styles.logoText}>RemindMe</Text>
+            </TouchableOpacity>
+            <View style={styles.headerActions}>
+              <TouchableOpacity style={styles.themeButton} onPress={toggleTheme}>
+                <Icon name={isDarkMode ? 'light-mode' : 'dark-mode'} size={24} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.menuButton} onPress={() => setShowMenu(!showMenu)}>
+                <Icon name="menu" size={24} color="white" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </LinearGradient>
+
         <ScrollView
           showsVerticalScrollIndicator={false}
           style={styles.scrollContainer}
           contentContainerStyle={styles.scrollContent}
         >
-          {/* Header with Overview */}
+          {/* Overview Section - Scrollable */}
           <LinearGradient
-            colors={isDarkMode ? ['#1a1a2e', '#16213e'] : ['#667EEA', '#764BA2']}
-            style={styles.header}
+            colors={isDarkMode ? ['#16213e', '#1a1a2e'] : ['#764BA2', '#667EEA']}
+            style={styles.overviewHeader}
           >
-            <View style={styles.headerContent}>
-              <TouchableOpacity
-                onPress={() => navigation.navigate('Home')}
-                style={styles.logoButton}
-              >
-                <LinearGradient colors={['#FFD700', '#FFA500']} style={styles.appLogo}>
-                  <Icon name="notifications" size={20} color="white" />
-                </LinearGradient>
-                <Text style={styles.logoText}>RemindMe</Text>
-              </TouchableOpacity>
-              <View style={styles.headerActions}>
-                <TouchableOpacity style={styles.themeButton} onPress={toggleTheme}>
-                  <Icon name={isDarkMode ? 'light-mode' : 'dark-mode'} size={24} color="white" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.menuButton} onPress={() => setShowMenu(!showMenu)}>
-                  <Icon name="menu" size={24} color="white" />
-                </TouchableOpacity>
-              </View>
-            </View>
             {renderOverviewChart()}
           </LinearGradient>
-
-          {/* Quick Actions */}
+          {/* Reminders List with Inline Tabs */}
           <View style={[styles.section, isDarkMode && styles.sectionDark]}>
-            <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>
-              Quick Actions
-            </Text>
-            <View style={styles.quickActions}>
-              <TouchableOpacity
-                style={[styles.quickActionCard, isDarkMode && styles.quickActionCardDark]}
-                onPress={() => navigation.navigate('CreateReminder')}
-              >
-                <LinearGradient
-                  colors={isDarkMode ? ['#2d3561', '#3a4575'] : ['#667EEA', '#764BA2']}
-                  style={styles.quickActionIcon}
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>
+                Reminders
+              </Text>
+              <View style={styles.inlineTabContainer}>
+                <TouchableOpacity
+                  style={[styles.inlineTabButton, activeTab === 'today' && styles.activeTabButton]}
+                  onPress={() => setActiveTab('today')}
                 >
-                  <Icon name="add" size={20} color="white" />
-                </LinearGradient>
-                <Text style={[styles.quickActionText, isDarkMode && styles.quickActionTextDark]}>
-                  Create New
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.quickActionCard, isDarkMode && styles.quickActionCardDark]}
-                onPress={() => navigation.navigate('ReminderList')}
-              >
-                <LinearGradient colors={['#10B981', '#059669']} style={styles.quickActionIcon}>
-                  <Icon name="list" size={20} color="white" />
-                </LinearGradient>
-                <Text style={[styles.quickActionText, isDarkMode && styles.quickActionTextDark]}>
-                  View All
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.quickActionCard, isDarkMode && styles.quickActionCardDark]}
-                onPress={() => navigation.navigate('Calendar')}
-              >
-                <LinearGradient colors={['#F59E0B', '#D97706']} style={styles.quickActionIcon}>
-                  <Icon name="calendar-today" size={20} color="white" />
-                </LinearGradient>
-                <Text style={[styles.quickActionText, isDarkMode && styles.quickActionTextDark]}>
-                  Calendar
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.quickActionCard, isDarkMode && styles.quickActionCardDark]}
-                onPress={() => navigation.navigate('Settings')}
-              >
-                <LinearGradient colors={['#EF4444', '#DC2626']} style={styles.quickActionIcon}>
-                  <Icon name="settings" size={20} color="white" />
-                </LinearGradient>
-                <Text style={[styles.quickActionText, isDarkMode && styles.quickActionTextDark]}>
-                  Settings
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Today's Reminders */}
-          {todayReminders.length > 0 && (
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>
-                  Today's Reminders
-                </Text>
-                <Text style={styles.sectionCount}>{todayReminders.length}</Text>
-              </View>
-              <FlatList
-                data={todayReminders.slice(0, 3)}
-                renderItem={renderReminderItem}
-                keyExtractor={(item) => item.id}
-                scrollEnabled={false}
-              />
-            </View>
-          )}
-
-          {/* Recent Reminders */}
-          {reminders.length > 0 && (
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>
-                  Recent Reminders
-                </Text>
-                <TouchableOpacity onPress={() => navigation.navigate('ReminderList')}>
-                  <Text style={styles.seeAllButton}>See All</Text>
+                  <Text
+                    style={[
+                      styles.tabText,
+                      activeTab === 'today' && styles.activeTabText,
+                      isDarkMode && styles.tabTextDark,
+                    ]}
+                  >
+                    Today
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.inlineTabButton,
+                    activeTab === 'recents' && styles.activeTabButton,
+                  ]}
+                  onPress={() => setActiveTab('recents')}
+                >
+                  <Text
+                    style={[
+                      styles.tabText,
+                      activeTab === 'recents' && styles.activeTabText,
+                      isDarkMode && styles.tabTextDark,
+                    ]}
+                  >
+                    Recents
+                  </Text>
                 </TouchableOpacity>
               </View>
-              <FlatList
-                data={reminders.slice(0, 5)}
-                renderItem={renderReminderItem}
-                keyExtractor={(item) => item.id}
-                scrollEnabled={false}
-              />
             </View>
-          )}
+            {displayedReminders.length > 0 ? (
+              displayedReminders.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[
+                    styles.reminderCard,
+                    !item.isActive && styles.reminderCardInactive,
+                    isDarkMode && styles.reminderCardDark,
+                  ]}
+                  onPress={() => toggleReminder(item.id)}
+                >
+                  <View style={styles.reminderHeader}>
+                    <View
+                      style={[
+                        styles.categoryBadge,
+                        { backgroundColor: (item.color || '#667EEA') + '20' },
+                      ]}
+                    >
+                      <Icon name={item.icon || 'label'} size={16} color={item.color || '#667EEA'} />
+                      <Text style={[styles.categoryText, { color: item.color || '#667EEA' }]}>
+                        {item.category || 'General'}
+                      </Text>
+                    </View>
+                    <Text style={[styles.timeText, isDarkMode && styles.timeTextDark]}>
+                      {new Date(item.createdAt).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </Text>
+                  </View>
 
+                  <View style={styles.reminderBody}>
+                    <Text
+                      style={[
+                        styles.reminderTitle,
+                        !item.isActive && styles.textInactive,
+                        isDarkMode && styles.reminderTitleDark,
+                      ]}
+                    >
+                      {item.title}
+                    </Text>
+                    {item.description ? (
+                      <Text
+                        style={[
+                          styles.reminderDescription,
+                          !item.isActive && styles.textInactive,
+                          isDarkMode && styles.reminderDescriptionDark,
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {item.description}
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  <View style={styles.reminderActions}>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => toggleReminder(item.id)}
+                    >
+                      <Icon
+                        name={item.isActive ? 'toggle-on' : 'toggle-off'}
+                        size={28}
+                        color={item.isActive ? '#10B981' : '#9CA3AF'}
+                      />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => deleteReminder(item.id)}
+                    >
+                      <Icon name="delete-outline" size={20} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
+              ))
+            ) : (
+              <View style={styles.emptyState}>
+                <Icon name="event-note" size={48} color="#CBD5E1" />
+                <Text style={[styles.emptyText, isDarkMode && styles.emptyTextDark]}>
+                  No reminders found
+                </Text>
+              </View>
+            )}
+          </View>
           {/* Empty State */}
           {reminders.length === 0 && (
             <View style={styles.emptyState}>
@@ -472,13 +491,7 @@ const HomeScreen = ({ navigation, route }) => {
           <Icon name="home" size={24} color="#667EEA" />
           <Text style={styles.footerNavLabel}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.footerNavItem}
-          onPress={() => navigation.navigate('CreateReminder')}
-        >
-          <Icon name="add-circle" size={24} color="#9CA3AF" />
-          <Text style={[styles.footerNavLabel, { color: '#9CA3AF' }]}>Add</Text>
-        </TouchableOpacity>
+
         <TouchableOpacity
           style={styles.footerNavItem}
           onPress={() => navigation.navigate('ReminderList')}
@@ -486,78 +499,112 @@ const HomeScreen = ({ navigation, route }) => {
           <Icon name="list" size={24} color="#9CA3AF" />
           <Text style={[styles.footerNavLabel, { color: '#9CA3AF' }]}>Reminders</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.createFooterButton}
+          onPress={() => navigation.navigate('CreateReminder')}
+        >
+          <LinearGradient colors={['#667EEA', '#764BA2']} style={styles.createFooterGradient}>
+            <Icon name="add" size={32} color="white" />
+          </LinearGradient>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={styles.footerNavItem}
-          onPress={() => {
-            console.log('Settings button pressed');
-            navigation.navigate('Settings');
-          }}
+          onPress={() => navigation.navigate('Calendar')}
+        >
+          <Icon name="calendar-today" size={24} color="#9CA3AF" />
+          <Text style={[styles.footerNavLabel, { color: '#9CA3AF' }]}>Calendar</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.footerNavItem}
+          onPress={() => navigation.navigate('Settings')}
         >
           <Icon name="settings" size={24} color="#9CA3AF" />
           <Text style={[styles.footerNavLabel, { color: '#9CA3AF' }]}>Settings</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Menu Dropdown */}
-      {showMenu && (
-        <View style={[styles.menuDropdown, isDarkMode && styles.menuDropdownDark]}>
-          <TouchableOpacity
-            style={[styles.menuItem, isDarkMode && styles.menuItemDark]}
-            onPress={() => {
-              setShowMenu(false);
-              navigation.navigate('Profile');
-            }}
-          >
-            <Icon name="person" size={20} color={isDarkMode ? '#bb86fc' : '#374151'} />
-            <Text style={[styles.menuText, isDarkMode && styles.menuTextDark]}>Profile</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.menuItem, isDarkMode && styles.menuItemDark]}
-            onPress={() => {
-              setShowMenu(false);
-              navigation.navigate('Settings');
-            }}
-          >
-            <Icon name="settings" size={20} color={isDarkMode ? '#bb86fc' : '#374151'} />
-            <Text style={[styles.menuText, isDarkMode && styles.menuTextDark]}>Settings</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.menuItem, isDarkMode && styles.menuItemDark]}
-            onPress={() => {
-              setShowMenu(false);
-              navigation.navigate('Calendar');
-            }}
-          >
-            <Icon name="help" size={20} color={isDarkMode ? '#bb86fc' : '#374151'} />
-            <Text style={[styles.menuText, isDarkMode && styles.menuTextDark]}>Help & Support</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.menuItem, isDarkMode && styles.menuItemDark]}
-            onPress={() => {
-              setShowMenu(false);
-              Alert.alert('About', 'RemindMe v1.0.0\nA beautiful reminder app');
-            }}
-          >
-            <Icon name="info" size={20} color={isDarkMode ? '#bb86fc' : '#374151'} />
-            <Text style={[styles.menuText, isDarkMode && styles.menuTextDark]}>About</Text>
-          </TouchableOpacity>
-          <View style={[styles.menuDivider, isDarkMode && { backgroundColor: '#333333' }]} />
-          <TouchableOpacity
-            style={[styles.menuItem, isDarkMode && styles.menuItemDark]}
-            onPress={() => setShowMenu(false)}
-          >
-            <Icon name="logout" size={20} color="#EF4444" />
-            <Text style={[styles.menuText, { color: '#EF4444' }]}>Logout</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Floating Action Button */}
-      <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('CreateReminder')}>
-        <LinearGradient colors={['#667EEA', '#764BA2']} style={styles.fabGradient}>
-          <Icon name="add" size={32} color="white" />
-        </LinearGradient>
-      </TouchableOpacity>
+      {/* Menu Dropdown with Overlay */}
+      <Modal
+        visible={showMenu}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowMenu(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowMenu(false)}>
+          <View style={styles.menuOverlay}>
+            <View style={[styles.menuDropdown, isDarkMode && styles.menuDropdownDark]}>
+              <TouchableOpacity
+                style={[styles.menuItem, isDarkMode && styles.menuItemDark]}
+                onPress={() => {
+                  setShowMenu(false);
+                  navigation.navigate('Profile');
+                }}
+              >
+                <Icon name="person" size={20} color={isDarkMode ? '#bb86fc' : '#374151'} />
+                <Text style={[styles.menuText, isDarkMode && styles.menuTextDark]}>Profile</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.menuItem, isDarkMode && styles.menuItemDark]}
+                onPress={() => {
+                  setShowMenu(false);
+                  navigation.navigate('Settings');
+                }}
+              >
+                <Icon name="settings" size={20} color={isDarkMode ? '#bb86fc' : '#374151'} />
+                <Text style={[styles.menuText, isDarkMode && styles.menuTextDark]}>Settings</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.menuItem, isDarkMode && styles.menuItemDark]}
+                onPress={() => {
+                  setShowMenu(false);
+                  navigation.navigate('Calendar');
+                }}
+              >
+                <Icon name="help" size={20} color={isDarkMode ? '#bb86fc' : '#374151'} />
+                <Text style={[styles.menuText, isDarkMode && styles.menuTextDark]}>
+                  Help & Support
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.menuItem, isDarkMode && styles.menuItemDark]}
+                onPress={() => {
+                  setShowMenu(false);
+                  Alert.alert('About', 'RemindMe v1.0.0\nA beautiful reminder app');
+                }}
+              >
+                <Icon name="info" size={20} color={isDarkMode ? '#bb86fc' : '#374151'} />
+                <Text style={[styles.menuText, isDarkMode && styles.menuTextDark]}>About</Text>
+              </TouchableOpacity>
+              <View style={[styles.menuDivider, isDarkMode && { backgroundColor: '#333333' }]} />
+              <TouchableOpacity
+                style={[styles.menuItem, isDarkMode && styles.menuItemDark]}
+                onPress={() => {
+                  setShowMenu(false);
+                  Alert.alert('Logout', 'Are you sure you want to logout?', [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Logout',
+                      style: 'destructive',
+                      onPress: async () => {
+                        const result = await logout();
+                        if (!result.success) {
+                          Alert.alert('Error', result.error);
+                        }
+                      },
+                    },
+                  ]);
+                }}
+              >
+                <Icon name="logout" size={20} color="#EF4444" />
+                <Text style={[styles.menuText, { color: '#EF4444' }]}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -576,12 +623,20 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
   },
-  header: {
-    paddingTop: 20,
+  navbar: {
+    paddingTop: 10,
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    zIndex: 10,
+    elevation: 5,
+  },
+  overviewHeader: {
+    paddingTop: 10,
     paddingHorizontal: 20,
     paddingBottom: 20,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
+    marginBottom: 10,
   },
   headerContent: {
     flexDirection: 'row',
@@ -765,6 +820,31 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
+  inlineTabContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  inlineTabButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: 'transparent',
+  },
+
+  activeTabButton: {
+    backgroundColor: '#667EEA',
+  },
+  tabText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#9CA3AF',
+  },
+  activeTabText: {
+    color: 'white',
+  },
+  tabTextDark: {
+    color: '#E5E7EB', // Lighter gray for better visibility
+  },
   footerNav: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -773,32 +853,50 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
     paddingVertical: 8,
+    paddingBottom: 20, // Extra padding for bottom
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    height: 80,
   },
   footerNavItem: {
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 4,
     paddingHorizontal: 8,
+    flex: 1,
+  },
+  createFooterButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  createFooterGradient: {
+    width: 50, // Slightly smaller to fit inline
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   footerNavLabel: {
     fontSize: 11,
     fontWeight: '600',
     color: '#667EEA',
-    marginTop: 2,
+    marginTop: 4,
   },
   section: {
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingTop: 10, // Reduced top padding
+    paddingBottom: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
+    marginTop: 8, // Add top margin for better spacing
+    paddingVertical: 8, // Ensure title has breathing room
   },
   sectionTitle: {
     fontSize: 20,
@@ -819,41 +917,11 @@ const styles = StyleSheet.create({
     color: '#667EEA',
     fontWeight: '600',
   },
-  quickActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginTop: 16,
-  },
-  quickActionCard: {
-    width: '48%',
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-    marginBottom: 8,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  quickActionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  quickActionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-  },
+
   reminderCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between', // Align content and actions
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 12,
@@ -876,6 +944,7 @@ const styles = StyleSheet.create({
   reminderContent: {
     flex: 1,
     marginLeft: 12,
+    justifyContent: 'center', // Vertically center text
   },
   reminderTitle: {
     fontSize: 16,
@@ -888,12 +957,50 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textTransform: 'capitalize',
   },
+  reminderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  categoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  categoryText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  timeText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  reminderBody: {
+    marginBottom: 8,
+  },
+  reminderDescription: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  textInactive: {
+    opacity: 0.5,
+    textDecorationLine: 'line-through',
+  },
   reminderActions: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   actionButton: {
     padding: 8,
+  },
+  reminderCardInactive: {
+    opacity: 0.6,
   },
   emptyState: {
     alignItems: 'center',
@@ -912,6 +1019,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
+  emptyText: {
+    fontSize: 16,
+    color: '#9CA3AF',
+    marginTop: 12,
+    textAlign: 'center',
+  },
   createFirstButton: {
     marginTop: 24,
   },
@@ -928,20 +1041,23 @@ const styles = StyleSheet.create({
     color: 'white',
     marginLeft: 8,
   },
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+  },
   menuDropdown: {
     position: 'absolute',
-    top: 140,
-    right: 10,
+    top: 60, // Adjusted to be closer to the button
+    right: 20,
     backgroundColor: 'white',
-    borderRadius: 12,
-    paddingVertical: 8,
-    minWidth: 180,
-    elevation: 15,
+    borderRadius: 16,
+    padding: 8,
+    width: 200,
+    elevation: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    zIndex: 999999,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
@@ -981,26 +1097,7 @@ const styles = StyleSheet.create({
   clearText: {
     display: 'none',
   },
-  fab: {
-    position: 'absolute',
-    bottom: 90,
-    right: 20,
-    zIndex: 1000,
-    borderRadius: 30,
-    overflow: 'hidden',
-    elevation: 10,
-  },
-  fabGradient: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#667EEA',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
+
   // Dark Mode Styles
   containerDark: {
     backgroundColor: '#0a0e27',
@@ -1031,27 +1128,34 @@ const styles = StyleSheet.create({
   sectionTitleDark: {
     color: '#ffffff',
   },
-  quickActionCardDark: {
-    backgroundColor: '#1e2347',
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    elevation: 4,
-  },
-  quickActionTextDark: {
-    color: '#ffffff',
-  },
+
   reminderCardDark: {
-    backgroundColor: '#1e2347',
+    backgroundColor: '#2d3748', // Lighter dark background for cards
     borderLeftColor: '#bb86fc',
     shadowColor: '#000',
     shadowOpacity: 0.3,
     elevation: 4,
   },
   reminderTitleDark: {
-    color: '#ffffff',
+    color: '#F9FAFB', // Almost white
   },
   reminderTypeDark: {
-    color: '#a0a8c0',
+    color: '#D1D5DB', // Light gray
+  },
+  reminderDescriptionDark: {
+    color: '#E5E7EB', // Lighter gray
+  },
+  timeTextDark: {
+    color: '#E5E7EB', // Lighter gray
+  },
+  emptyTextDark: {
+    color: '#D1D5DB',
+  },
+  emptyTitleDark: {
+    color: '#F9FAFB',
+  },
+  emptySubtitleDark: {
+    color: '#9CA3AF',
   },
   footerNavDark: {
     backgroundColor: '#1a1f3a',
@@ -1059,15 +1163,15 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   menuDropdownDark: {
-    backgroundColor: '#1a1f3a',
-    borderColor: '#3a4560',
-    borderWidth: 1.5,
+    backgroundColor: '#2d3748', // Match card background
+    borderColor: '#4B5563',
+    borderWidth: 1,
   },
   menuItemDark: {
-    borderBottomColor: '#2a2f4a',
+    borderBottomColor: '#4B5563',
   },
   menuTextDark: {
-    color: '#ffffff',
+    color: '#F9FAFB',
   },
 });
 

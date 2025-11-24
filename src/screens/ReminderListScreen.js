@@ -4,7 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ThemeContext } from '../../App';
+import { ThemeContext } from '../context/ThemeContext';
+import FilterModal from '../components/FilterModal';
+import { applyAllFilters, applySorting, getActiveFilterCount } from '../utils/filterUtils';
 
 const ReminderListScreen = ({ navigation }) => {
   const { isDarkMode } = useContext(ThemeContext);
@@ -12,6 +14,15 @@ const ReminderListScreen = ({ navigation }) => {
   const [filteredReminders, setFilteredReminders] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all');
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [filters, setFilters] = useState({
+    categories: [],
+    dateRange: null,
+    timeSlots: [],
+    types: [],
+    statuses: [],
+  });
+  const [sortBy, setSortBy] = useState('dateNewest');
 
   useEffect(() => {
     loadReminders();
@@ -19,7 +30,7 @@ const ReminderListScreen = ({ navigation }) => {
 
   useEffect(() => {
     filterReminders();
-  }, [reminders, searchQuery, selectedFilter]);
+  }, [reminders, searchQuery, selectedFilter, filters, sortBy]);
 
   const loadReminders = async () => {
     try {
@@ -47,6 +58,7 @@ const ReminderListScreen = ({ navigation }) => {
   const filterReminders = () => {
     let filtered = [...reminders];
 
+    // Apply search
     if (searchQuery) {
       filtered = filtered.filter(
         (reminder) =>
@@ -55,9 +67,16 @@ const ReminderListScreen = ({ navigation }) => {
       );
     }
 
+    // Apply advanced filters
+    filtered = applyAllFilters(filtered, filters);
+
+    // Apply old filter (for backward compatibility)
     if (selectedFilter !== 'all') {
       filtered = filtered.filter((reminder) => reminder.type === selectedFilter);
     }
+
+    // Apply sorting
+    filtered = applySorting(filtered, sortBy);
 
     setFilteredReminders(filtered);
   };
@@ -123,12 +142,16 @@ const ReminderListScreen = ({ navigation }) => {
       low: '#6B7280',
       normal: '#3B82F6',
       high: '#F59E0B',
-      urgent: '#EF4444'
+      urgent: '#EF4444',
     };
 
     return (
       <TouchableOpacity
-        style={[styles.reminderCard, !item.isActive && styles.reminderCardInactive, isDarkMode && styles.reminderCardDark]}
+        style={[
+          styles.reminderCard,
+          !item.isActive && styles.reminderCardInactive,
+          isDarkMode && styles.reminderCardDark,
+        ]}
         activeOpacity={0.9}
       >
         <View style={styles.cardHeader}>
@@ -136,22 +159,42 @@ const ReminderListScreen = ({ navigation }) => {
             <Icon name={getReminderIcon(item.type)} size={20} color="white" />
           </LinearGradient>
           <View style={styles.headerInfo}>
-            <Text style={[styles.reminderTitle, !item.isActive && styles.textInactive, isDarkMode && styles.reminderTitleDark]}>
+            <Text
+              style={[
+                styles.reminderTitle,
+                !item.isActive && styles.textInactive,
+                isDarkMode && styles.reminderTitleDark,
+              ]}
+            >
               {item.title}
             </Text>
             <View style={styles.typeRow}>
-              <Text style={[styles.reminderType, isDarkMode && styles.reminderTypeDark]}>{item.type}</Text>
-              <View style={[styles.priorityDot, { backgroundColor: priorityColors[item.priority] }]} />
-              <Text style={[styles.priorityText, isDarkMode && styles.priorityTextDark]}>{item.priority}</Text>
+              <Text style={[styles.reminderType, isDarkMode && styles.reminderTypeDark]}>
+                {item.type}
+              </Text>
+              <View
+                style={[styles.priorityDot, { backgroundColor: priorityColors[item.priority] }]}
+              />
+              <Text style={[styles.priorityText, isDarkMode && styles.priorityTextDark]}>
+                {item.priority}
+              </Text>
             </View>
           </View>
           <View style={styles.statusBadge}>
-            <View style={[styles.statusDot, { backgroundColor: item.isActive ? '#10B981' : '#9CA3AF' }]} />
+            <View
+              style={[styles.statusDot, { backgroundColor: item.isActive ? '#10B981' : '#9CA3AF' }]}
+            />
           </View>
         </View>
 
         {item.description && (
-          <Text style={[styles.reminderDescription, !item.isActive && styles.textInactive, isDarkMode && styles.reminderDescriptionDark]}>
+          <Text
+            style={[
+              styles.reminderDescription,
+              !item.isActive && styles.textInactive,
+              isDarkMode && styles.reminderDescriptionDark,
+            ]}
+          >
             {item.description}
           </Text>
         )}
@@ -160,7 +203,9 @@ const ReminderListScreen = ({ navigation }) => {
           <View style={styles.metaInfo}>
             <View style={[styles.metaChip, isDarkMode && styles.metaChipDark]}>
               <Icon name="label" size={12} color="#6B7280" />
-              <Text style={[styles.metaText, isDarkMode && styles.metaTextDark]}>{item.category}</Text>
+              <Text style={[styles.metaText, isDarkMode && styles.metaTextDark]}>
+                {item.category}
+              </Text>
             </View>
             <View style={[styles.metaChip, isDarkMode && styles.metaChipDark]}>
               <Icon name="schedule" size={12} color="#6B7280" />
@@ -168,8 +213,8 @@ const ReminderListScreen = ({ navigation }) => {
             </View>
           </View>
           <View style={styles.cardActions}>
-            <TouchableOpacity 
-              style={[styles.actionBtn, styles.toggleBtn]} 
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.toggleBtn]}
               onPress={() => toggleReminder(item.id)}
             >
               <Icon
@@ -178,8 +223,8 @@ const ReminderListScreen = ({ navigation }) => {
                 color={item.isActive ? '#F59E0B' : '#10B981'}
               />
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.actionBtn, styles.deleteBtn]} 
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.deleteBtn]}
               onPress={() => deleteReminder(item.id)}
             >
               <Icon name="delete-outline" size={18} color="#EF4444" />
@@ -190,7 +235,7 @@ const ReminderListScreen = ({ navigation }) => {
     );
   };
 
-  const filters = [
+  const typeFilters = [
     { id: 'all', label: 'All', icon: 'list' },
     { id: 'hourly', label: 'Hourly', icon: 'access-time' },
     { id: 'weekly', label: 'Weekly', icon: 'date-range' },
@@ -199,17 +244,30 @@ const ReminderListScreen = ({ navigation }) => {
     { id: 'custom', label: 'Custom', icon: 'settings' },
   ];
 
+  const handleApplyFilters = (newFilters, newSortBy) => {
+    setFilters(newFilters);
+    setSortBy(newSortBy);
+  };
+
   return (
     <SafeAreaView style={[styles.container, isDarkMode && styles.containerDark]}>
-      <LinearGradient colors={isDarkMode ? ['#1a1a2e', '#16213e'] : ['#667EEA', '#764BA2']} style={styles.header}>
+      <LinearGradient
+        colors={isDarkMode ? ['#1a1a2e', '#16213e'] : ['#667EEA', '#764BA2']}
+        style={styles.header}
+      >
         <View style={styles.headerContent}>
           <TouchableOpacity onPress={() => navigation.navigate('Home')} style={styles.logoButton}>
             <Icon name="event-note" size={28} color="white" />
             <Text style={styles.logoText}>Reminders</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>My Reminders</Text>
-          <TouchableOpacity style={styles.menuButton}>
-            <Icon name="menu" size={24} color="white" />
+          <TouchableOpacity style={styles.filterButton} onPress={() => setShowFilterModal(true)}>
+            <Icon name="filter-list" size={24} color="white" />
+            {getActiveFilterCount(filters) > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{getActiveFilterCount(filters)}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -232,7 +290,7 @@ const ReminderListScreen = ({ navigation }) => {
         <FlatList
           horizontal
           showsHorizontalScrollIndicator={false}
-          data={filters}
+          data={typeFilters}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <TouchableOpacity
@@ -266,7 +324,9 @@ const ReminderListScreen = ({ navigation }) => {
         ListEmptyComponent={() => (
           <View style={styles.emptyState}>
             <Icon name="search-off" size={64} color="#CBD5E1" />
-            <Text style={[styles.emptyTitle, isDarkMode && styles.emptyTitleDark]}>No Reminders Found</Text>
+            <Text style={[styles.emptyTitle, isDarkMode && styles.emptyTitleDark]}>
+              No Reminders Found
+            </Text>
             <Text style={[styles.emptySubtitle, isDarkMode && styles.emptySubtitleDark]}>
               {searchQuery ? 'Try adjusting your search' : 'Create your first reminder'}
             </Text>
@@ -289,13 +349,7 @@ const ReminderListScreen = ({ navigation }) => {
           <Icon name="home" size={24} color="#9CA3AF" />
           <Text style={[styles.footerNavLabel, { color: '#9CA3AF' }]}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.footerNavItem}
-          onPress={() => navigation.navigate('CreateReminder')}
-        >
-          <Icon name="add-circle" size={24} color="#9CA3AF" />
-          <Text style={[styles.footerNavLabel, { color: '#9CA3AF' }]}>Add</Text>
-        </TouchableOpacity>
+
         <TouchableOpacity
           style={styles.footerNavItem}
           onPress={() => navigation.navigate('ReminderList')}
@@ -303,11 +357,42 @@ const ReminderListScreen = ({ navigation }) => {
           <Icon name="list" size={24} color="#667EEA" />
           <Text style={[styles.footerNavLabel, { color: '#667EEA' }]}>Reminders</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.footerNavItem}>
+
+        <TouchableOpacity
+          style={styles.createFooterButton}
+          onPress={() => navigation.navigate('CreateReminder')}
+        >
+          <LinearGradient colors={['#667EEA', '#764BA2']} style={styles.createFooterGradient}>
+            <Icon name="add" size={32} color="white" />
+          </LinearGradient>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.footerNavItem}
+          onPress={() => navigation.navigate('Calendar')}
+        >
+          <Icon name="calendar-today" size={24} color="#9CA3AF" />
+          <Text style={[styles.footerNavLabel, { color: '#9CA3AF' }]}>Calendar</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.footerNavItem}
+          onPress={() => navigation.navigate('Settings')}
+        >
           <Icon name="settings" size={24} color="#9CA3AF" />
           <Text style={[styles.footerNavLabel, { color: '#9CA3AF' }]}>Settings</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Filter Modal */}
+      <FilterModal
+        visible={showFilterModal}
+        onClose={() => setShowFilterModal(false)}
+        onApply={handleApplyFilters}
+        initialFilters={filters}
+        initialSort={sortBy}
+        isDarkMode={isDarkMode}
+      />
     </SafeAreaView>
   );
 };
@@ -352,6 +437,33 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  filterButton: {
+    width: 44,
+    height: 44,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  filterBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'white',
   },
   headerTitle: {
     fontSize: 20,
@@ -601,11 +713,13 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
     paddingVertical: 8,
+    paddingBottom: 20, // Extra padding for bottom
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    height: 80,
   },
   footerNavDark: {
     backgroundColor: '#1a1f3a',
@@ -613,14 +727,28 @@ const styles = StyleSheet.create({
   },
   footerNavItem: {
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 4,
     paddingHorizontal: 8,
+    flex: 1,
+  },
+  createFooterButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    flex: 1,
+  },
+  createFooterGradient: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   footerNavLabel: {
     fontSize: 11,
     fontWeight: '600',
     color: '#667EEA',
-    marginTop: 2,
+    marginTop: 4,
   },
 });
 

@@ -1,9 +1,17 @@
 import React, { useState, useContext } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  TextInput,
+  Alert,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
-import { ThemeContext } from '../../App';
+import { ThemeContext } from '../context/ThemeContext';
 
 const ProfileScreen = ({ navigation }) => {
   const { isDarkMode } = useContext(ThemeContext);
@@ -21,7 +29,10 @@ const ProfileScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={[styles.container, isDarkMode && styles.containerDark]}>
-      <LinearGradient colors={isDarkMode ? ['#1a1a2e', '#16213e'] : ['#667EEA', '#764BA2']} style={styles.header}>
+      <LinearGradient
+        colors={isDarkMode ? ['#1a1a2e', '#16213e'] : ['#667EEA', '#764BA2']}
+        style={styles.header}
+      >
         <View style={styles.headerContent}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Icon name="arrow-back" size={24} color="white" />
@@ -44,14 +55,16 @@ const ProfileScreen = ({ navigation }) => {
         </View>
 
         <View style={[styles.section, isDarkMode && styles.sectionDark]}>
-          <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>Personal Information</Text>
-          
+          <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>
+            Personal Information
+          </Text>
+
           <View style={styles.inputGroup}>
             <Text style={[styles.label, isDarkMode && styles.labelDark]}>Full Name</Text>
             <TextInput
               style={[styles.input, isDarkMode && styles.inputDark]}
               value={profile.name}
-              onChangeText={(text) => setProfile({...profile, name: text})}
+              onChangeText={(text) => setProfile({ ...profile, name: text })}
               placeholder="Enter your name"
               placeholderTextColor={isDarkMode ? '#9CA3AF' : '#6B7280'}
             />
@@ -62,7 +75,7 @@ const ProfileScreen = ({ navigation }) => {
             <TextInput
               style={[styles.input, isDarkMode && styles.inputDark]}
               value={profile.email}
-              onChangeText={(text) => setProfile({...profile, email: text})}
+              onChangeText={(text) => setProfile({ ...profile, email: text })}
               placeholder="Enter your email"
               keyboardType="email-address"
               placeholderTextColor={isDarkMode ? '#9CA3AF' : '#6B7280'}
@@ -74,7 +87,7 @@ const ProfileScreen = ({ navigation }) => {
             <TextInput
               style={[styles.input, isDarkMode && styles.inputDark]}
               value={profile.phone}
-              onChangeText={(text) => setProfile({...profile, phone: text})}
+              onChangeText={(text) => setProfile({ ...profile, phone: text })}
               placeholder="Enter your phone"
               keyboardType="phone-pad"
               placeholderTextColor={isDarkMode ? '#9CA3AF' : '#6B7280'}
@@ -83,24 +96,36 @@ const ProfileScreen = ({ navigation }) => {
         </View>
 
         <View style={[styles.section, isDarkMode && styles.sectionDark]}>
-          <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>Preferences</Text>
-          
+          <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>
+            Preferences
+          </Text>
+
           <TouchableOpacity style={styles.preferenceItem}>
             <View style={styles.preferenceLeft}>
               <Icon name="notifications" size={20} color="#667EEA" />
-              <Text style={[styles.preferenceText, isDarkMode && styles.preferenceTextDark]}>Push Notifications</Text>
+              <Text style={[styles.preferenceText, isDarkMode && styles.preferenceTextDark]}>
+                Push Notifications
+              </Text>
             </View>
-            <Icon name={profile.notifications ? 'toggle-on' : 'toggle-off'} 
-                  size={32} color={profile.notifications ? '#10B981' : '#9CA3AF'} />
+            <Icon
+              name={profile.notifications ? 'toggle-on' : 'toggle-off'}
+              size={32}
+              color={profile.notifications ? '#10B981' : '#9CA3AF'}
+            />
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.preferenceItem}>
             <View style={styles.preferenceLeft}>
               <Icon name="dark-mode" size={20} color="#667EEA" />
-              <Text style={[styles.preferenceText, isDarkMode && styles.preferenceTextDark]}>Dark Mode</Text>
+              <Text style={[styles.preferenceText, isDarkMode && styles.preferenceTextDark]}>
+                Dark Mode
+              </Text>
             </View>
-            <Icon name={isDarkMode ? 'toggle-on' : 'toggle-off'} 
-                  size={32} color={isDarkMode ? '#10B981' : '#9CA3AF'} />
+            <Icon
+              name={isDarkMode ? 'toggle-on' : 'toggle-off'}
+              size={32}
+              color={isDarkMode ? '#10B981' : '#9CA3AF'}
+            />
           </TouchableOpacity>
         </View>
       </ScrollView>
