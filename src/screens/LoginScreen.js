@@ -17,7 +17,7 @@ import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
 import { ThemeContext } from '../context/ThemeContext';
 
-const LoginScreen = ({ navigation }) => {
+const LoginScreen = ({ navigation, route }) => {
   const { login, loginWithGoogle } = useContext(AuthContext);
   const { isDarkMode } = useContext(ThemeContext);
 
@@ -26,6 +26,12 @@ const LoginScreen = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+
+  React.useEffect(() => {
+    if (route.params?.message) {
+      Alert.alert('Success', route.params.message);
+    }
+  }, [route.params?.message]);
 
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -156,7 +162,10 @@ const LoginScreen = ({ navigation }) => {
             </View>
 
             {/* Forgot Password */}
-            <TouchableOpacity style={styles.forgotPassword}>
+            <TouchableOpacity
+              style={styles.forgotPassword}
+              onPress={() => navigation.navigate('ForgotPassword')}
+            >
               <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
             </TouchableOpacity>
 

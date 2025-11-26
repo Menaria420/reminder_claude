@@ -13,6 +13,8 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import CalendarScreen from './src/screens/CalendarScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import SignupScreen from './src/screens/SignupScreen';
+import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
+import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
 import { ThemeContext } from './src/context/ThemeContext';
 import { AuthProvider, AuthContext } from './src/context/AuthContext';
 import NotificationService from './src/utils/NotificationService';
@@ -23,6 +25,21 @@ LogBox.ignoreLogs([
   'VirtualizedList: You have a large list that is slow to update',
   'Warning: Cannot update a component',
 ]);
+
+import * as Linking from 'expo-linking';
+
+const linking = {
+  prefixes: [Linking.createURL('/'), 'reminderapp://'],
+  config: {
+    screens: {
+      AuthStack: {
+        screens: {
+          ResetPassword: 'reset-password/:token/:email',
+        },
+      },
+    },
+  },
+};
 
 const Stack = createStackNavigator();
 
@@ -37,6 +54,9 @@ const AuthStack = () => {
     >
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Signup" component={SignupScreen} />
+      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+
+      <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
     </Stack.Navigator>
   );
 };
@@ -152,7 +172,7 @@ export default function App() {
     <ThemeContext.Provider value={{ isDarkMode, toggleTheme }}>
       <AuthProvider>
         <SafeAreaProvider>
-          <NavigationContainer>
+          <NavigationContainer linking={linking}>
             <StatusBar style={isDarkMode ? 'light' : 'dark'} />
             <Navigation />
           </NavigationContainer>

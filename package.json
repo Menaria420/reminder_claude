@@ -21,6 +21,7 @@
     "expo-av": "~14.0.7",
     "expo-haptics": "~15.0.7",
     "expo-linear-gradient": "~15.0.7",
+    "expo-linking": "~8.0.9",
     "expo-notifications": "^0.28.19",
     "expo-status-bar": "~3.0.8",
     "react": "19.1.0",

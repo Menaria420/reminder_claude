@@ -39,18 +39,13 @@ const HomeScreen = ({ navigation, route }) => {
   }, []);
 
   useEffect(() => {
-    if (route.params?.newReminder) {
-      const newReminder = {
-        id: Date.now().toString(),
-        ...route.params.newReminder,
-        createdAt: new Date().toISOString(),
-        isActive: true,
-      };
-      const updatedReminders = [newReminder, ...reminders];
-      setReminders(updatedReminders);
-      saveReminders(updatedReminders);
+    if (route.params?.newReminder || route.params?.refresh) {
+      loadReminders();
+      // Reset params to avoid infinite loops or stale state if needed,
+      // though navigation.setParams might be needed if we want to clear it.
+      // For now, just reloading is enough as the effect triggers on change.
     }
-  }, [route.params?.newReminder]);
+  }, [route.params?.newReminder, route.params?.refresh]);
 
   const loadReminders = async () => {
     try {
