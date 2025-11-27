@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput, Alert } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemeContext } from '../context/ThemeContext';
 import FilterModal from '../components/FilterModal';
 import { applyAllFilters, applySorting, getActiveFilterCount } from '../utils/filterUtils';
+import { showSuccessToast, showErrorToast, showDeleteConfirm } from '../utils/ToastManager';
 
 const ReminderListScreen = ({ navigation }) => {
   const { isDarkMode } = useContext(ThemeContext);
@@ -104,23 +105,17 @@ const ReminderListScreen = ({ navigation }) => {
   };
 
   const deleteReminder = (id) => {
-    Alert.alert('Delete Reminder', 'Are you sure you want to delete this reminder?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            const updatedReminders = reminders.filter((r) => r.id !== id);
-            setReminders(updatedReminders);
-            await AsyncStorage.setItem('reminders', JSON.stringify(updatedReminders));
-          } catch (error) {
-            console.error('Error deleting reminder:', error);
-            Alert.alert('Error', 'Failed to delete reminder.');
-          }
-        },
-      },
-    ]);
+    showDeleteConfirm('this reminder', async () => {
+      try {
+        const updatedReminders = reminders.filter((r) => r.id !== id);
+        setReminders(updatedReminders);
+        await AsyncStorage.setItem('reminders', JSON.stringify(updatedReminders));
+        showSuccessToast('Reminder deleted successfully');
+      } catch (error) {
+        console.error('Error deleting reminder:', error);
+        showErrorToast('Failed to delete reminder.');
+      }
+    });
   };
 
   const toggleReminder = async (id) => {
@@ -132,7 +127,7 @@ const ReminderListScreen = ({ navigation }) => {
       await AsyncStorage.setItem('reminders', JSON.stringify(updatedReminders));
     } catch (error) {
       console.error('Error toggling reminder:', error);
-      Alert.alert('Error', 'Failed to update reminder.');
+      showErrorToast('Failed to update reminder.');
     }
   };
 

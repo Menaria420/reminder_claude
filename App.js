@@ -18,6 +18,10 @@ import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
 import { ThemeContext } from './src/context/ThemeContext';
 import { AuthProvider, AuthContext } from './src/context/AuthContext';
 import NotificationService from './src/utils/NotificationService';
+import Toast from './src/components/Toast';
+import CustomAlert from './src/components/CustomAlert';
+import { showToast } from './src/components/Toast';
+import { showAlert } from './src/components/CustomAlert';
 
 // Suppress non-critical warnings
 LogBox.ignoreLogs([
@@ -164,6 +168,21 @@ export default function App() {
     }
   };
 
+  const toastRef = React.useRef(null);
+  const alertRef = React.useRef(null);
+
+  React.useEffect(() => {
+    // Make toast globally accessible
+    if (toastRef.current) {
+      window.showToast = showToast;
+      global.showToast = showToast;
+    }
+    if (alertRef.current) {
+      window.showAlert = showAlert;
+      global.showAlert = showAlert;
+    }
+  }, []);
+
   if (!themeLoaded) {
     return null;
   }
@@ -176,6 +195,8 @@ export default function App() {
             <StatusBar style={isDarkMode ? 'light' : 'dark'} />
             <Navigation />
           </NavigationContainer>
+          <Toast ref={toastRef} />
+          <CustomAlert ref={alertRef} />
         </SafeAreaProvider>
       </AuthProvider>
     </ThemeContext.Provider>

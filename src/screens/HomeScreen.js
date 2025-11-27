@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -7,7 +8,6 @@ import {
   StyleSheet,
   Dimensions,
   FlatList,
-  Alert,
   Modal,
   TouchableWithoutFeedback,
 } from 'react-native';
@@ -18,6 +18,12 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemeContext } from '../context/ThemeContext';
 import { AuthContext } from '../context/AuthContext';
+import {
+  showSuccessToast,
+  showErrorToast,
+  showInfoToast,
+  showDeleteConfirm,
+} from '../utils/ToastManager';
 
 const { width } = Dimensions.get('window');
 
@@ -38,14 +44,12 @@ const HomeScreen = ({ navigation, route }) => {
     setGreetingMessage();
   }, []);
 
-  useEffect(() => {
-    if (route.params?.newReminder || route.params?.refresh) {
+  // Reload reminders whenever the screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
       loadReminders();
-      // Reset params to avoid infinite loops or stale state if needed,
-      // though navigation.setParams might be needed if we want to clear it.
-      // For now, just reloading is enough as the effect triggers on change.
-    }
-  }, [route.params?.newReminder, route.params?.refresh]);
+    }, [])
+  );
 
   const loadReminders = async () => {
     try {
@@ -69,17 +73,20 @@ const HomeScreen = ({ navigation, route }) => {
     }
   };
 
-  const saveReminders = async (remindersList) => {
+  const saveReminders = React.useCallback(async (remindersList) => {
     try {
       if (!Array.isArray(remindersList)) {
-        return;
+        console.error('Invalid reminders list format');
+        return false;
       }
       await AsyncStorage.setItem('reminders', JSON.stringify(remindersList));
+      return true;
     } catch (error) {
       console.error('Error saving reminders:', error);
-      Alert.alert('Error', 'Failed to save reminders. Please try again.');
+      showErrorToast('Failed to save reminders. Please try again.');
+      return false;
     }
-  };
+  }, []);
 
   const setGreetingMessage = () => {
     const hour = new Date().getHours();
@@ -88,28 +95,75 @@ const HomeScreen = ({ navigation, route }) => {
     else setGreeting('Good Evening');
   };
 
-  const toggleReminder = (id) => {
-    const updatedReminders = reminders.map((reminder) =>
-      reminder.id === id ? { ...reminder, isActive: !reminder.isActive } : reminder
-    );
-    setReminders(updatedReminders);
-    saveReminders(updatedReminders);
-  };
+  const toggleReminder = React.useCallback(
+    async (id) => {
+      try {
+        if (!id) {
+          showErrorToast('Invalid reminder ID');
+          return;
+        }
 
-  const deleteReminder = (id) => {
-    Alert.alert('Delete Reminder', 'Are you sure you want to delete this reminder?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
-          const updatedReminders = reminders.filter((r) => r.id !== id);
-          setReminders(updatedReminders);
-          saveReminders(updatedReminders);
-        },
-      },
-    ]);
-  };
+        const updatedReminders = reminders.map((reminder) =>
+          reminder.id === id ? { ...reminder, isActive: !reminder.isActive } : reminder
+        );
+
+        setReminders(updatedReminders);
+        await saveReminders(updatedReminders);
+
+        const activated = updatedReminders.find((r) => r.id === id)?.isActive;
+        if (activated) {
+          showSuccessToast('Reminder activated');
+        } else {
+          showSuccessToast('Reminder paused');
+        }
+      } catch (error) {
+        console.error('Error toggling reminder:', error);
+        showErrorToast('Failed to update reminder');
+      }
+    },
+    [reminders]
+  );
+
+  const deleteReminder = React.useCallback(
+    (id) => {
+      try {
+        if (!id) {
+          showErrorToast('Invalid reminder ID');
+          return;
+        }
+
+        // Find the reminder to get its title for the confirmation dialog
+        const reminderToDelete = reminders.find((r) => r.id === id);
+        if (!reminderToDelete) {
+          showErrorToast('Reminder not found');
+          return;
+        }
+
+        // Show confirmation dialog
+        showDeleteConfirm(
+          reminderToDelete.title || 'this reminder',
+          async () => {
+            try {
+              const updatedReminders = reminders.filter((r) => r.id !== id);
+              setReminders(updatedReminders);
+              await saveReminders(updatedReminders);
+              showSuccessToast('Reminder deleted successfully');
+            } catch (error) {
+              console.error('Error deleting reminder:', error);
+              showErrorToast('Failed to delete reminder. Please try again.');
+            }
+          },
+          () => {
+            // Cancel callback - do nothing
+          }
+        );
+      } catch (error) {
+        console.error('Error in deleteReminder:', error);
+        showErrorToast('An error occurred while deleting the reminder');
+      }
+    },
+    [reminders]
+  );
 
   const getReminderIcon = (type) => {
     const icons = {
@@ -378,42 +432,46 @@ const HomeScreen = ({ navigation, route }) => {
             </View>
             {displayedReminders.length > 0 ? (
               displayedReminders.map((item) => (
-                <TouchableOpacity
+                <View
                   key={item.id}
                   style={[
                     styles.reminderCard,
                     !item.isActive && styles.reminderCardInactive,
                     isDarkMode && styles.reminderCardDark,
                   ]}
-                  onPress={() => toggleReminder(item.id)}
                 >
-                  <View style={styles.reminderHeader}>
-                    <View
-                      style={[
-                        styles.categoryBadge,
-                        { backgroundColor: (item.color || '#667EEA') + '20' },
-                      ]}
-                    >
-                      <Icon name={item.icon || 'label'} size={16} color={item.color || '#667EEA'} />
-                      <Text style={[styles.categoryText, { color: item.color || '#667EEA' }]}>
-                        {item.category || 'General'}
+                  <View style={styles.reminderCardLeftContent}>
+                    <View style={styles.reminderCardTop}>
+                      <View
+                        style={[
+                          styles.categoryBadge,
+                          { backgroundColor: (item.color || '#667EEA') + '20' },
+                        ]}
+                      >
+                        <Icon
+                          name={item.icon || 'label'}
+                          size={14}
+                          color={item.color || '#667EEA'}
+                        />
+                        <Text style={[styles.categoryText, { color: item.color || '#667EEA' }]}>
+                          {item.category || 'General'}
+                        </Text>
+                      </View>
+                      <Text style={[styles.timeText, isDarkMode && styles.timeTextDark]}>
+                        {new Date(item.createdAt).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
                       </Text>
                     </View>
-                    <Text style={[styles.timeText, isDarkMode && styles.timeTextDark]}>
-                      {new Date(item.createdAt).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </Text>
-                  </View>
 
-                  <View style={styles.reminderBody}>
                     <Text
                       style={[
                         styles.reminderTitle,
                         !item.isActive && styles.textInactive,
                         isDarkMode && styles.reminderTitleDark,
                       ]}
+                      numberOfLines={1}
                     >
                       {item.title}
                     </Text>
@@ -424,21 +482,21 @@ const HomeScreen = ({ navigation, route }) => {
                           !item.isActive && styles.textInactive,
                           isDarkMode && styles.reminderDescriptionDark,
                         ]}
-                        numberOfLines={2}
+                        numberOfLines={1}
                       >
                         {item.description}
                       </Text>
                     ) : null}
                   </View>
 
-                  <View style={styles.reminderActions}>
+                  <View style={styles.reminderCardActions}>
                     <TouchableOpacity
                       style={styles.actionButton}
                       onPress={() => toggleReminder(item.id)}
                     >
                       <Icon
                         name={item.isActive ? 'toggle-on' : 'toggle-off'}
-                        size={28}
+                        size={24}
                         color={item.isActive ? '#10B981' : '#9CA3AF'}
                       />
                     </TouchableOpacity>
@@ -446,10 +504,10 @@ const HomeScreen = ({ navigation, route }) => {
                       style={styles.actionButton}
                       onPress={() => deleteReminder(item.id)}
                     >
-                      <Icon name="delete-outline" size={20} color="#EF4444" />
+                      <Icon name="delete-outline" size={18} color="#EF4444" />
                     </TouchableOpacity>
                   </View>
-                </TouchableOpacity>
+                </View>
               ))
             ) : (
               <View style={styles.emptyState}>
@@ -567,7 +625,7 @@ const HomeScreen = ({ navigation, route }) => {
                 style={[styles.menuItem, isDarkMode && styles.menuItemDark]}
                 onPress={() => {
                   setShowMenu(false);
-                  Alert.alert('About', 'RemindMe v1.0.0\nA beautiful reminder app');
+                  showInfoToast('RemindMe v1.0.0 - A beautiful reminder app');
                 }}
               >
                 <Icon name="info" size={20} color={isDarkMode ? '#bb86fc' : '#374151'} />
@@ -578,19 +636,14 @@ const HomeScreen = ({ navigation, route }) => {
                 style={[styles.menuItem, isDarkMode && styles.menuItemDark]}
                 onPress={() => {
                   setShowMenu(false);
-                  Alert.alert('Logout', 'Are you sure you want to logout?', [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Logout',
-                      style: 'destructive',
-                      onPress: async () => {
-                        const result = await logout();
-                        if (!result.success) {
-                          Alert.alert('Error', result.error);
-                        }
-                      },
-                    },
-                  ]);
+                  showDeleteConfirm('your account and session', async () => {
+                    const result = await logout();
+                    if (!result.success) {
+                      showErrorToast(result.error);
+                    } else {
+                      showSuccessToast('Logged out successfully');
+                    }
+                  });
                 }}
               >
                 <Icon name="logout" size={20} color="#EF4444" />
@@ -848,13 +901,17 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
     paddingVertical: 8,
-    paddingBottom: 20, // Extra padding for bottom
+    paddingBottom: 20,
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     height: 80,
+  },
+  footerNavDark: {
+    backgroundColor: '#1a1f3a',
+    borderTopColor: '#3a4560',
   },
   footerNavItem: {
     alignItems: 'center',
@@ -881,22 +938,28 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   section: {
-    paddingHorizontal: 20,
-    paddingTop: 10, // Reduced top padding
-    paddingBottom: 20,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
+  },
+  sectionDark: {
+    backgroundColor: 'transparent',
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-    marginTop: 8, // Add top margin for better spacing
-    paddingVertical: 8, // Ensure title has breathing room
+    marginBottom: 14,
+    marginTop: 0,
+    paddingHorizontal: 0,
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#111827',
+  },
+  sectionTitleDark: {
+    color: '#FFFFFF',
   },
   sectionCount: {
     fontSize: 16,
@@ -916,18 +979,19 @@ const styles = StyleSheet.create({
   reminderCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between', // Align content and actions
+    justifyContent: 'space-between',
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 12,
-    marginBottom: 8,
+    marginBottom: 10,
+    marginHorizontal: 0,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    borderLeftWidth: 4,
-    borderLeftColor: '#667EEA',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   reminderIcon: {
     width: 36,
@@ -936,38 +1000,51 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  reminderContent: {
+  reminderCardLeftContent: {
     flex: 1,
-    marginLeft: 12,
-    justifyContent: 'center', // Vertically center text
+    marginRight: 12,
   },
-  reminderTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  reminderType: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginTop: 2,
-    textTransform: 'capitalize',
-  },
-  reminderHeader: {
+  reminderCardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
+  reminderCardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: 8,
+  },
+  reminderTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  reminderTitleDark: {
+    color: '#FFFFFF',
+  },
+  reminderType: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginTop: 1,
+    textTransform: 'capitalize',
+  },
+  reminderTypeDark: {
+    color: '#9CA3AF',
+  },
+
   categoryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 8,
     gap: 4,
   },
   categoryText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
   timeText: {
@@ -975,13 +1052,17 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontWeight: '500',
   },
-  reminderBody: {
-    marginBottom: 8,
+  timeTextDark: {
+    color: '#D1D5DB',
   },
+
   reminderDescription: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6B7280',
-    marginTop: 4,
+    marginTop: 3,
+  },
+  reminderDescriptionDark: {
+    color: '#D1D5DB',
   },
   textInactive: {
     opacity: 0.5,
@@ -990,17 +1071,29 @@ const styles = StyleSheet.create({
   reminderActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginLeft: 12,
   },
   actionButton: {
     padding: 8,
+    marginLeft: 0,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 40,
+    minHeight: 40,
   },
   reminderCardInactive: {
     opacity: 0.6,
   },
+  reminderCardDark: {
+    backgroundColor: '#1a1f3a',
+    borderColor: '#3a4560',
+    shadowOpacity: 0.2,
+  },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: 40,
+    paddingVertical: 50,
+    paddingHorizontal: 20,
   },
   emptyTitle: {
     fontSize: 20,
@@ -1019,6 +1112,9 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginTop: 12,
     textAlign: 'center',
+  },
+  emptyTextDark: {
+    color: '#D1D5DB',
   },
   createFirstButton: {
     marginTop: 24,

@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,41 +11,77 @@ import {
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import { Audio } from 'expo-av';
 import { ThemeContext } from '../context/ThemeContext';
 
+// Map ringtone IDs to audio files
+const RINGTONE_FILES = {
+  default: require('../../assets/sounds/default.wav'),
+  mechanical_bell: require('../../assets/sounds/mechanical_bell.wav'),
+  digital_alarm: require('../../assets/sounds/digital_alarm.wav'),
+  classic_ring: require('../../assets/sounds/classic_ring.wav'),
+  soft_chime: require('../../assets/sounds/soft_chime.wav'),
+  gentle_notification: require('../../assets/sounds/gentle_notification.wav'),
+  electronic_beep: require('../../assets/sounds/electronic_beep.wav'),
+};
+
 const RINGTONES = [
-  { id: 'default', name: 'Default', icon: 'notifications', description: 'System default sound' },
+  { id: 'default', name: 'Default', icon: 'notifications', description: 'Standard notification' },
   {
     id: 'mechanical_bell',
     name: 'Mechanical Bell',
     icon: 'notifications-active',
-    description: 'Classic bell sound',
+    description: 'Ding Dong sound',
   },
-  { id: 'digital_alarm', name: 'Digital Alarm', icon: 'alarm', description: 'Digital beeping' },
+  { id: 'digital_alarm', name: 'Digital Alarm', icon: 'alarm', description: 'Beep beep alarm' },
   {
     id: 'classic_ring',
     name: 'Classic Ring',
     icon: 'ring-volume',
-    description: 'Traditional phone ring',
+    description: 'Phone ringtone',
   },
-  { id: 'soft_chime', name: 'Soft Chime', icon: 'music-note', description: 'Gentle chime' },
+  { id: 'soft_chime', name: 'Soft Chime', icon: 'music-note', description: 'Gentle whisper' },
   {
     id: 'gentle_notification',
     name: 'Gentle Notification',
     icon: 'notifications-none',
-    description: 'Soft notification',
+    description: 'Polite reminder',
   },
   {
     id: 'electronic_beep',
     name: 'Electronic Beep',
     icon: 'volume-up',
-    description: 'Electronic beep',
+    description: 'Robotic beep',
   },
 ];
 
 const RingtoneSelector = ({ visible, onClose, selectedRingtone, onSelect }) => {
   const { isDarkMode } = useContext(ThemeContext);
   const [currentlyPlaying, setCurrentlyPlaying] = useState(null);
+  const soundRef = useRef(null);
+
+  useEffect(() => {
+    // Configure audio mode
+    const configureAudio = async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: true,
+        });
+      } catch (error) {
+        console.log('Error configuring audio:', error);
+      }
+    };
+    configureAudio();
+
+    // Cleanup on unmount
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.unloadAsync();
+      }
+    };
+  }, []);
 
   const handleVibrate = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -54,32 +90,34 @@ const RingtoneSelector = ({ visible, onClose, selectedRingtone, onSelect }) => {
   const playRingtone = async (ringtoneId) => {
     try {
       handleVibrate();
-      setCurrentlyPlaying(ringtoneId);
 
-      // For demo, we'll use vibration patterns for different ringtones
-      // In production with actual sound files, you would load and play them
-      const vibrationPatterns = {
-        default: Haptics.NotificationFeedbackType.Success,
-        mechanical_bell: Haptics.NotificationFeedbackType.Warning,
-        digital_alarm: Haptics.NotificationFeedbackType.Error,
-        classic_ring: Haptics.NotificationFeedbackType.Success,
-        soft_chime: Haptics.ImpactFeedbackStyle.Light,
-        gentle_notification: Haptics.ImpactFeedbackStyle.Light,
-        electronic_beep: Haptics.ImpactFeedbackStyle.Medium,
-      };
-
-      // Play vibration pattern
-      const pattern = vibrationPatterns[ringtoneId];
-      if (pattern in Haptics.NotificationFeedbackType) {
-        await Haptics.notificationAsync(pattern);
-      } else {
-        await Haptics.impactAsync(pattern);
+      // Stop any currently playing sound
+      if (soundRef.current) {
+        await soundRef.current.unloadAsync();
+        soundRef.current = null;
       }
 
-      // Reset playing state after 1 second
-      setTimeout(() => {
-        setCurrentlyPlaying(null);
-      }, 1000);
+      setCurrentlyPlaying(ringtoneId);
+
+      // Play the specific audio file for this ringtone
+      const source = RINGTONE_FILES[ringtoneId] || RINGTONE_FILES.default;
+
+      const { sound } = await Audio.Sound.createAsync(
+        source,
+        { shouldPlay: false } // Don't auto-play, we'll call playAsync
+      );
+
+      soundRef.current = sound;
+
+      // Set up completion listener
+      sound.setOnPlaybackStatusUpdate(async (status) => {
+        if (status.didJustFinish) {
+          setCurrentlyPlaying(null);
+        }
+      });
+
+      // Play explicitly
+      await sound.playAsync();
     } catch (error) {
       console.log('Error playing ringtone preview:', error);
       setCurrentlyPlaying(null);

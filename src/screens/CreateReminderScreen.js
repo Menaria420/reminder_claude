@@ -35,6 +35,9 @@ const CreateReminderScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showRingtoneSelector, setShowRingtoneSelector] = useState(false);
+  const [selectedDayForTimePicker, setSelectedDayForTimePicker] = useState(null);
+  const [showCustomTimePicker, setShowCustomTimePicker] = useState(false);
+  const [customTime, setCustomTime] = useState(new Date());
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -68,7 +71,10 @@ const CreateReminderScreen = ({ navigation }) => {
       yearRepeat: 'specific',
       year: new Date().getFullYear(),
       monthRepeat: 'specific',
+      month: new Date().getMonth() + 1,
       dateRepeat: 'specific',
+      date: new Date().getDate(),
+      time: new Date(),
     },
     goal: '',
   });
@@ -256,6 +262,27 @@ const CreateReminderScreen = ({ navigation }) => {
     });
   };
 
+  const addCustomTimeForDay = (day) => {
+    handleVibrate();
+    setSelectedDayForTimePicker(day);
+    setCustomTime(new Date());
+    setShowCustomTimePicker(true);
+  };
+
+  const confirmCustomTime = () => {
+    if (!selectedDayForTimePicker) return;
+
+    const timeString = customTime.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+
+    toggleTime(selectedDayForTimePicker, timeString);
+    setShowCustomTimePicker(false);
+    setSelectedDayForTimePicker(null);
+  };
+
   const validateStep = () => {
     if (currentStep === 1) {
       if (!reminderData.category) {
@@ -380,10 +407,6 @@ const CreateReminderScreen = ({ navigation }) => {
           }
         } else if (reminderData.type === 'weekly' && reminderData.weeklyDays.length > 0) {
           // Schedule for each day and time
-          // This is complex as we need multiple notifications
-          // For now, we'll just schedule the very next one to keep it simple
-          // In a full app, we'd iterate and schedule all
-
           let nextTrigger = null;
           const now = new Date();
 
@@ -391,52 +414,117 @@ const CreateReminderScreen = ({ navigation }) => {
           for (const day of reminderData.weeklyDays) {
             const times = reminderData.weeklyTimes[day] || [];
             for (const timeStr of times) {
-              const [time, period] = timeStr.split(' ');
-              const [hours, minutes] = time.split(':').map(Number);
-              let hour24 = hours;
-              if (period === 'PM' && hours !== 12) hour24 += 12;
-              if (period === 'AM' && hours === 12) hour24 = 0;
+              try {
+                // Parse time string (e.g., "9:00 AM")
+                const timeParts = timeStr.trim().split(' ');
+                if (timeParts.length !== 2) {
+                  console.warn('Invalid time format:', timeStr);
+                  continue;
+                }
 
-              // Calculate date for this day
-              const dayIndex = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(day);
-              const currentDayIndex = now.getDay();
-              let daysUntil = dayIndex - currentDayIndex;
-              if (daysUntil < 0) daysUntil += 7;
+                const [time, period] = timeParts;
+                const [hoursStr, minutesStr] = time.split(':');
+                const hours = parseInt(hoursStr, 10);
+                const minutes = parseInt(minutesStr, 10);
 
-              const potentialDate = new Date();
-              potentialDate.setDate(now.getDate() + daysUntil);
-              potentialDate.setHours(hour24, minutes, 0, 0);
+                if (
+                  isNaN(hours) ||
+                  isNaN(minutes) ||
+                  hours < 1 ||
+                  hours > 12 ||
+                  minutes < 0 ||
+                  minutes > 59
+                ) {
+                  console.warn('Invalid time values:', timeStr);
+                  continue;
+                }
 
-              // If it's today but passed, move to next week
-              if (daysUntil === 0 && potentialDate < now) {
-                potentialDate.setDate(potentialDate.getDate() + 7);
-              }
+                // Convert to 24-hour format
+                let hour24 = hours;
+                if (period === 'PM' && hours !== 12) hour24 += 12;
+                if (period === 'AM' && hours === 12) hour24 = 0;
 
-              if (!nextTrigger || potentialDate < nextTrigger) {
-                nextTrigger = potentialDate;
+                // Calculate date for this day
+                const dayIndex = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(day);
+                if (dayIndex === -1) {
+                  console.warn('Invalid day name:', day);
+                  continue;
+                }
+
+                const currentDayIndex = now.getDay();
+                let daysUntil = dayIndex - currentDayIndex;
+                if (daysUntil < 0) daysUntil += 7;
+
+                const potentialDate = new Date();
+                potentialDate.setDate(now.getDate() + daysUntil);
+                potentialDate.setHours(hour24, minutes, 0, 0);
+
+                // If it's today but the time has passed, move to next week
+                if (daysUntil === 0 && potentialDate < now) {
+                  potentialDate.setDate(potentialDate.getDate() + 7);
+                }
+
+                // Validate the date is valid
+                if (isNaN(potentialDate.getTime())) {
+                  console.warn('Invalid date created for:', day, timeStr);
+                  continue;
+                }
+
+                if (!nextTrigger || potentialDate < nextTrigger) {
+                  nextTrigger = potentialDate;
+                }
+              } catch (error) {
+                console.error('Error parsing time for', day, timeStr, error);
+                continue;
               }
             }
           }
 
-          if (nextTrigger) {
+          if (nextTrigger && !isNaN(nextTrigger.getTime())) {
             triggerTime = nextTrigger;
           } else {
-            // Fallback
-            triggerTime.setHours(triggerTime.getHours() + 24);
+            // Fallback - set to tomorrow at 9 AM
+            triggerTime = new Date();
+            triggerTime.setDate(triggerTime.getDate() + 1);
+            triggerTime.setHours(9, 0, 0, 0);
           }
         } else if (reminderData.type === '15days') {
           triggerTime = new Date(reminderData.fifteenDaysTime);
           // Set date to start date
-          triggerTime.setFullYear(reminderData.fifteenDaysStart.getFullYear());
-          triggerTime.setMonth(reminderData.fifteenDaysStart.getMonth());
-          triggerTime.setDate(reminderData.fifteenDaysStart.getDate());
+          const startDate = new Date(reminderData.fifteenDaysStart);
+          if (!isNaN(startDate.getTime())) {
+            triggerTime.setFullYear(startDate.getFullYear());
+            triggerTime.setMonth(startDate.getMonth());
+            triggerTime.setDate(startDate.getDate());
+          }
         } else if (reminderData.type === 'monthly') {
           triggerTime = new Date(reminderData.monthlyTime);
-          triggerTime.setDate(reminderData.monthlyDate);
+          const monthlyDate = reminderData.monthlyDate;
+          if (monthlyDate && monthlyDate !== 'last') {
+            triggerTime.setDate(monthlyDate);
+          } else if (monthlyDate === 'last') {
+            // Set to last day of current month
+            triggerTime.setMonth(triggerTime.getMonth() + 1, 0);
+          }
         } else {
           // Default to 1 hour from now
           triggerTime.setHours(triggerTime.getHours() + 1);
         }
+
+        // Final validation: ensure the date is valid and in the future
+        if (isNaN(triggerTime.getTime())) {
+          console.warn('Invalid trigger time calculated, using default');
+          triggerTime = new Date();
+          triggerTime.setHours(triggerTime.getHours() + 1);
+        }
+
+        // Ensure trigger time is in the future
+        if (triggerTime < new Date()) {
+          console.log('Trigger time is in the past, adjusting to next occurrence');
+          triggerTime.setDate(triggerTime.getDate() + 1);
+        }
+
+        console.log('Final trigger time:', triggerTime.toISOString());
 
         // Create notification record
         await NotificationManager.createNotification(newReminder, triggerTime);
@@ -869,65 +957,95 @@ const CreateReminderScreen = ({ navigation }) => {
         {type === 'weekly' && (
           <>
             <Text style={[styles.configTitle, isDarkMode && styles.configTitleDark]}>
-              Select Days & Times
+              Select Days
             </Text>
-            <View style={styles.weekDayList}>
+            <View style={styles.weekDayChipGrid}>
               {weekDays.map((day) => {
                 const isSelected = reminderData.weeklyDays.includes(day);
+                const timesCount = (reminderData.weeklyTimes[day] || []).length;
                 return (
-                  <View key={day} style={[styles.dayRow, isDarkMode && styles.dayRowDark]}>
-                    <TouchableOpacity
-                      style={[styles.dayToggle, isSelected && styles.dayToggleActive]}
-                      onPress={() => toggleWeekday(day)}
+                  <TouchableOpacity
+                    key={day}
+                    style={[
+                      styles.weekDayChip,
+                      isSelected && styles.weekDayChipSelected,
+                      isDarkMode && styles.weekDayChipDark,
+                      isSelected && isDarkMode && styles.weekDayChipSelectedDark,
+                    ]}
+                    onPress={() => toggleWeekday(day)}
+                  >
+                    <Text
+                      style={[styles.weekDayChipText, isSelected && styles.weekDayChipTextSelected]}
                     >
-                      <Text
-                        style={[styles.dayToggleText, isSelected && styles.dayToggleTextActive]}
-                      >
-                        {day}
-                      </Text>
-                    </TouchableOpacity>
-
-                    {isSelected && (
-                      <View style={styles.dayTimesContainer}>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                          {(reminderData.weeklyTimes[day] || []).map((time) => (
-                            <TouchableOpacity
-                              key={time}
-                              style={styles.timeChipSmall}
-                              onPress={() => toggleTime(day, time)}
-                            >
-                              <Text style={styles.timeChipTextSmall}>{time}</Text>
-                              <Icon name="close" size={14} color="#666" style={{ marginLeft: 4 }} />
-                            </TouchableOpacity>
-                          ))}
-                          <TouchableOpacity
-                            style={styles.addTimeButton}
-                            onPress={() => {
-                              // For simplicity in this demo, we'll cycle through quick times or show a picker
-                              // Ideally this would open a time picker for this specific day
-                              // Here we'll just show the quick times grid for this day in a modal or inline
-                              // For now, let's use the existing quickTimes logic but applied to this day
-                              Alert.alert(
-                                `Select Time for ${day}`,
-                                'Choose a time',
-                                quickTimes
-                                  .map((t) => ({
-                                    text: t,
-                                    onPress: () => toggleTime(day, t),
-                                  }))
-                                  .concat([{ text: 'Cancel', style: 'cancel' }])
-                              );
-                            }}
-                          >
-                            <Icon name="add" size={20} color="#667EEA" />
-                          </TouchableOpacity>
-                        </ScrollView>
+                      {day}
+                    </Text>
+                    {isSelected && timesCount > 0 && (
+                      <View style={styles.dayTimeCount}>
+                        <Text style={styles.dayTimeCountText}>{timesCount}</Text>
                       </View>
                     )}
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </View>
+
+            {reminderData.weeklyDays.length > 0 && (
+              <>
+                <Text
+                  style={[
+                    styles.configTitle,
+                    isDarkMode && styles.configTitleDark,
+                    { marginTop: 16 },
+                  ]}
+                >
+                  Set Times for Selected Days
+                </Text>
+                <View style={styles.selectedDaysContainer}>
+                  {reminderData.weeklyDays.map((day) => {
+                    const dayTimes = reminderData.weeklyTimes[day] || [];
+                    return (
+                      <View
+                        key={day}
+                        style={[styles.dayTimeCard, isDarkMode && styles.dayTimeCardDark]}
+                      >
+                        <View style={styles.dayTimeCardHeader}>
+                          <Text
+                            style={[
+                              styles.dayTimeCardTitle,
+                              isDarkMode && styles.dayTimeCardTitleDark,
+                            ]}
+                          >
+                            {day}
+                          </Text>
+                          <TouchableOpacity
+                            style={styles.addTimeIconButton}
+                            onPress={() => addCustomTimeForDay(day)}
+                          >
+                            <Icon name="add-circle" size={24} color="#667EEA" />
+                          </TouchableOpacity>
+                        </View>
+                        {dayTimes.length > 0 ? (
+                          <View style={styles.timeChipsRow}>
+                            {dayTimes.map((time, index) => (
+                              <View key={index} style={styles.timeChipCompact}>
+                                <Text style={styles.timeChipCompactText}>{time}</Text>
+                                <TouchableOpacity onPress={() => toggleTime(day, time)}>
+                                  <Icon name="close" size={16} color="#667EEA" />
+                                </TouchableOpacity>
+                              </View>
+                            ))}
+                          </View>
+                        ) : (
+                          <Text style={[styles.noTimesText, isDarkMode && styles.noTimesTextDark]}>
+                            No times set. Tap + to add.
+                          </Text>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              </>
+            )}
           </>
         )}
 
@@ -1060,6 +1178,7 @@ const CreateReminderScreen = ({ navigation }) => {
             <View style={styles.customCard}>
               <Text style={styles.customTitle}>Custom Schedule</Text>
 
+              {/* Year Selection */}
               <View style={styles.customRow}>
                 <Text style={styles.customLabel}>Year</Text>
                 <View style={styles.toggleGroup}>
@@ -1125,9 +1244,11 @@ const CreateReminderScreen = ({ navigation }) => {
                   }}
                   keyboardType="numeric"
                   placeholder="2025"
+                  maxLength={4}
                 />
               )}
 
+              {/* Month Selection */}
               <View style={styles.customRow}>
                 <Text style={styles.customLabel}>Month</Text>
                 <View style={styles.toggleGroup}>
@@ -1180,6 +1301,54 @@ const CreateReminderScreen = ({ navigation }) => {
                 </View>
               </View>
 
+              {reminderData.customSettings.monthRepeat === 'specific' && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.chipScroll}
+                >
+                  {[
+                    'Jan',
+                    'Feb',
+                    'Mar',
+                    'Apr',
+                    'May',
+                    'Jun',
+                    'Jul',
+                    'Aug',
+                    'Sep',
+                    'Oct',
+                    'Nov',
+                    'Dec',
+                  ].map((month, index) => (
+                    <TouchableOpacity
+                      key={month}
+                      style={[
+                        styles.chip,
+                        reminderData.customSettings.month === index + 1 && styles.chipActive,
+                      ]}
+                      onPress={() => {
+                        handleVibrate();
+                        setReminderData({
+                          ...reminderData,
+                          customSettings: { ...reminderData.customSettings, month: index + 1 },
+                        });
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          reminderData.customSettings.month === index + 1 && styles.chipTextActive,
+                        ]}
+                      >
+                        {month}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+
+              {/* Date Selection */}
               <View style={styles.customRow}>
                 <Text style={styles.customLabel}>Date</Text>
                 <View style={styles.toggleGroup}>
@@ -1232,13 +1401,58 @@ const CreateReminderScreen = ({ navigation }) => {
                 </View>
               </View>
 
-              <TouchableOpacity
-                style={styles.timePickerButton}
-                onPress={() => setShowTimePicker(true)}
-              >
-                <Icon name="access-time" size={20} color="#667EEA" />
-                <Text style={styles.timePickerText}>Set Time</Text>
-              </TouchableOpacity>
+              {reminderData.customSettings.dateRepeat === 'specific' && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.chipScroll}
+                >
+                  {[...Array(31)].map((_, i) => (
+                    <TouchableOpacity
+                      key={i + 1}
+                      style={[
+                        styles.chip,
+                        reminderData.customSettings.date === i + 1 && styles.chipActive,
+                      ]}
+                      onPress={() => {
+                        handleVibrate();
+                        setReminderData({
+                          ...reminderData,
+                          customSettings: { ...reminderData.customSettings, date: i + 1 },
+                        });
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          reminderData.customSettings.date === i + 1 && styles.chipTextActive,
+                        ]}
+                      >
+                        {i + 1}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+
+              {/* Time Selection */}
+              <View style={styles.customRow}>
+                <Text style={styles.customLabel}>Time</Text>
+                <TouchableOpacity
+                  style={styles.timePickerButton}
+                  onPress={() => setShowTimePicker(true)}
+                >
+                  <Icon name="access-time" size={20} color="#667EEA" />
+                  <Text style={styles.timePickerText}>
+                    {reminderData.customSettings.time
+                      ? new Date(reminderData.customSettings.time).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : 'Select Time'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </>
         )}
@@ -1412,6 +1626,7 @@ const CreateReminderScreen = ({ navigation }) => {
             <Text style={styles.logoText}>Back</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Create Reminder</Text>
+          {/* Create Button */}
           <TouchableOpacity
             onPress={currentStep === 3 ? handleCreateReminder : handleNext}
             style={styles.checkButton}
@@ -1475,6 +1690,124 @@ const CreateReminderScreen = ({ navigation }) => {
             }
           }}
         />
+      )}
+
+      {/* Custom Time Picker for Weekly Reminders */}
+      {showCustomTimePicker && Platform.OS !== 'web' && (
+        <DateTimePicker
+          value={customTime}
+          mode="time"
+          display="default"
+          onChange={(event, selectedTime) => {
+            if (event.type === 'dismissed') {
+              setShowCustomTimePicker(false);
+              setSelectedDayForTimePicker(null);
+              return;
+            }
+
+            if (selectedTime && selectedDayForTimePicker) {
+              setCustomTime(selectedTime);
+              const timeString = selectedTime.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+              });
+              toggleTime(selectedDayForTimePicker, timeString);
+              handleVibrate();
+            }
+
+            setShowCustomTimePicker(false);
+            setSelectedDayForTimePicker(null);
+          }}
+        />
+      )}
+
+      {/* Web Time Picker Modal */}
+      {showCustomTimePicker && Platform.OS === 'web' && (
+        <Modal
+          visible={showCustomTimePicker}
+          transparent
+          animationType="slide"
+          onRequestClose={() => {
+            setShowCustomTimePicker(false);
+            setSelectedDayForTimePicker(null);
+          }}
+        >
+          <TouchableWithoutFeedback
+            onPress={() => {
+              setShowCustomTimePicker(false);
+              setSelectedDayForTimePicker(null);
+            }}
+          >
+            <View style={styles.modalOverlay}>
+              <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+                <View style={[styles.timePickerModal, isDarkMode && styles.timePickerModalDark]}>
+                  <View style={styles.timePickerHeader}>
+                    <Text
+                      style={[styles.timePickerTitle, isDarkMode && styles.timePickerTitleDark]}
+                    >
+                      Add Time for {selectedDayForTimePicker}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setShowCustomTimePicker(false);
+                        setSelectedDayForTimePicker(null);
+                      }}
+                    >
+                      <Icon name="close" size={24} color={isDarkMode ? '#E5E7EB' : '#6B7280'} />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.timePickerContent}>
+                    <Text
+                      style={[styles.quickTimesLabel, isDarkMode && styles.quickTimesLabelDark]}
+                    >
+                      Select a Time
+                    </Text>
+                    <View style={styles.quickTimesGrid}>
+                      {quickTimes.map((time) => (
+                        <TouchableOpacity
+                          key={time}
+                          style={[styles.quickTimeChip, isDarkMode && styles.quickTimeChipDark]}
+                          onPress={() => {
+                            if (selectedDayForTimePicker) {
+                              toggleTime(selectedDayForTimePicker, time);
+                              handleVibrate();
+                              setShowCustomTimePicker(false);
+                              setSelectedDayForTimePicker(null);
+                            }
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.quickTimeChipText,
+                              isDarkMode && styles.quickTimeChipTextDark,
+                            ]}
+                          >
+                            {time}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={styles.timePickerActions}>
+                    <TouchableOpacity
+                      style={styles.timePickerCancelButton}
+                      onPress={() => {
+                        handleVibrate();
+                        setShowCustomTimePicker(false);
+                        setSelectedDayForTimePicker(null);
+                      }}
+                    >
+                      <Text style={styles.timePickerCancelText}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
       )}
 
       {/* Success Modal */}
@@ -1661,68 +1994,219 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
-  weekDayList: {
-    marginBottom: 24,
-  },
-  dayRow: {
-    marginBottom: 12,
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 12,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  dayRowDark: {
-    backgroundColor: '#2a2a2a',
-  },
-  dayToggle: {
+  // New compact weekly day selection styles
+  weekDayChipGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
   },
-  dayToggleActive: {
-    marginBottom: 12,
+  weekDayChip: {
+    position: 'relative',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
   },
-  dayToggleText: {
-    fontSize: 16,
+  weekDayChipSelected: {
+    backgroundColor: '#EEF2FF',
+    borderColor: '#667EEA',
+  },
+  weekDayChipDark: {
+    backgroundColor: '#2a2a2a',
+    borderColor: '#3a4560',
+  },
+  weekDayChipSelectedDark: {
+    backgroundColor: '#3a4560',
+    borderColor: '#667EEA',
+  },
+  weekDayChipText: {
+    fontSize: 14,
     fontWeight: '600',
-    color: '#9CA3AF',
+    color: '#6B7280',
   },
-  dayToggleTextActive: {
+  weekDayChipTextSelected: {
     color: '#667EEA',
     fontWeight: '700',
   },
-  dayTimesContainer: {
-    flexDirection: 'row',
+  dayTimeCount: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: '#667EEA',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
   },
-  timeChipSmall: {
+  dayTimeCountText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'white',
+  },
+  selectedDaysContainer: {
+    gap: 12,
+  },
+  dayTimeCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  dayTimeCardDark: {
+    backgroundColor: '#2a2a2a',
+    borderColor: '#3a4560',
+  },
+  dayTimeCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  dayTimeCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  dayTimeCardTitleDark: {
+    color: '#E5E7EB',
+  },
+  addTimeIconButton: {
+    padding: 4,
+  },
+  timeChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  timeChipCompact: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#EEF2FF',
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    marginRight: 8,
+    gap: 6,
   },
-  timeChipTextSmall: {
+  timeChipCompactText: {
     fontSize: 13,
     color: '#667EEA',
     fontWeight: '600',
   },
-  addTimeButton: {
-    width: 32,
-    height: 32,
+  noTimesText: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+  },
+  noTimesTextDark: {
+    color: '#6B7280',
+  },
+  // Time picker modal styles
+  timePickerModal: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    width: '100%',
+    maxHeight: '80%',
+    position: 'absolute',
+    bottom: 0,
+  },
+  timePickerModalDark: {
+    backgroundColor: '#1a1a1a',
+  },
+  timePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  timePickerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  timePickerTitleDark: {
+    color: '#E5E7EB',
+  },
+  timePickerContent: {
+    padding: 16,
+  },
+  quickTimesLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  quickTimesLabelDark: {
+    color: '#9CA3AF',
+  },
+  quickTimesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  quickTimeChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 16,
     backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  quickTimeChipDark: {
+    backgroundColor: '#2a2a2a',
+    borderColor: '#3a4560',
+  },
+  quickTimeChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  quickTimeChipTextDark: {
+    color: '#9CA3AF',
+  },
+  timePickerActions: {
+    flexDirection: 'row',
+    padding: 16,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  timePickerCancelButton: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 14,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+  },
+  timePickerConfirmButton: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  timePickerGradientButton: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+  },
+  timePickerCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  timePickerConfirmText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: 'white',
   },
   typeCardDark: {
     backgroundColor: '#2a2a2a',

@@ -204,7 +204,9 @@ class NotificationService {
           reminderId: notificationData.reminderId,
           category: notificationData.category,
         },
-        sound: settings.soundEnabled ? notificationData.ringTone || 'default' : null,
+        // In Expo Go, custom sounds don't work in background. We force 'default' to ensure SOME sound plays.
+        // In a production build with custom assets bundled, you would use: notificationData.ringTone
+        sound: settings.soundEnabled ? 'default' : null,
         vibrate: settings.vibrationEnabled ? [0, 250, 250, 250] : [],
         priority: Notifications.AndroidNotificationPriority.HIGH,
         ...(channelId && { channelId }),
