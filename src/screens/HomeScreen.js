@@ -24,6 +24,7 @@ import {
   showInfoToast,
   showDeleteConfirm,
 } from '../utils/ToastManager';
+import { getReminderDisplayTime, getFormattedNextTrigger } from '../utils/reminderUtils';
 
 const { width } = Dimensions.get('window');
 
@@ -185,6 +186,17 @@ const HomeScreen = ({ navigation, route }) => {
       custom: ['#EF4444', '#DC2626'],
     };
     return colors[type] || ['#6B7280', '#4B5563'];
+  };
+
+  const getIconForType = (type) => {
+    const icons = {
+      hourly: 'access-time',
+      weekly: 'date-range',
+      '15days': 'refresh',
+      monthly: 'calendar-today',
+      custom: 'settings',
+    };
+    return icons[type] || 'notifications';
   };
 
   const getFilteredReminders = () => {
@@ -431,84 +443,134 @@ const HomeScreen = ({ navigation, route }) => {
               </View>
             </View>
             {displayedReminders.length > 0 ? (
-              displayedReminders.map((item) => (
-                <View
-                  key={item.id}
-                  style={[
-                    styles.reminderCard,
-                    !item.isActive && styles.reminderCardInactive,
-                    isDarkMode && styles.reminderCardDark,
-                  ]}
-                >
-                  <View style={styles.reminderCardLeftContent}>
-                    <View style={styles.reminderCardTop}>
-                      <View
-                        style={[
-                          styles.categoryBadge,
-                          { backgroundColor: (item.color || '#667EEA') + '20' },
-                        ]}
-                      >
-                        <Icon
-                          name={item.icon || 'label'}
-                          size={14}
-                          color={item.color || '#667EEA'}
-                        />
-                        <Text style={[styles.categoryText, { color: item.color || '#667EEA' }]}>
-                          {item.category || 'General'}
-                        </Text>
-                      </View>
-                      <Text style={[styles.timeText, isDarkMode && styles.timeTextDark]}>
-                        {new Date(item.createdAt).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </Text>
-                    </View>
+              displayedReminders.map((item) => {
+                const colors = getReminderColor(item.type);
+                const priorityColors = {
+                  low: { bg: '#F3F4F6', text: '#6B7280' },
+                  normal: { bg: '#DBEAFE', text: '#2563EB' },
+                  high: { bg: '#FEF3C7', text: '#D97706' },
+                  urgent: { bg: '#FEE2E2', text: '#DC2626' },
+                };
+                const priority = priorityColors[item.priority] || priorityColors.normal;
 
-                    <Text
-                      style={[
-                        styles.reminderTitle,
-                        !item.isActive && styles.textInactive,
-                        isDarkMode && styles.reminderTitleDark,
-                      ]}
-                      numberOfLines={1}
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[
+                      styles.reminderCard,
+                      !item.isActive && styles.reminderCardInactive,
+                      isDarkMode && styles.reminderCardDark,
+                      { borderLeftColor: colors[0] },
+                    ]}
+                    onPress={() => navigation.navigate('ReminderList', { scrollToId: item.id })}
+                    activeOpacity={0.7}
+                  >
+                    {/* Left: Type Icon */}
+                    <LinearGradient
+                      colors={colors}
+                      style={styles.cardTypeIcon}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
                     >
-                      {item.title}
-                    </Text>
-                    {item.description ? (
+                      <Icon name={getIconForType(item.type)} size={22} color="white" />
+                    </LinearGradient>
+
+                    {/* Center: Main Content */}
+                    <View style={styles.cardContent}>
+                      {/* Title */}
                       <Text
                         style={[
-                          styles.reminderDescription,
+                          styles.reminderTitle,
                           !item.isActive && styles.textInactive,
-                          isDarkMode && styles.reminderDescriptionDark,
+                          isDarkMode && styles.reminderTitleDark,
                         ]}
                         numberOfLines={1}
                       >
-                        {item.description}
+                        {item.title}
                       </Text>
-                    ) : null}
-                  </View>
 
-                  <View style={styles.reminderCardActions}>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => toggleReminder(item.id)}
-                    >
-                      <Icon
-                        name={item.isActive ? 'toggle-on' : 'toggle-off'}
-                        size={24}
-                        color={item.isActive ? '#10B981' : '#9CA3AF'}
-                      />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => deleteReminder(item.id)}
-                    >
-                      <Icon name="delete-outline" size={18} color="#EF4444" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))
+                      {/* Description - only render if exists */}
+                      {item.description ? (
+                        <Text
+                          style={[
+                            styles.reminderDescription,
+                            !item.isActive && styles.textInactive,
+                            isDarkMode && styles.reminderDescriptionDark,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {item.description}
+                        </Text>
+                      ) : null}
+
+                      {/* Next Trigger - Compact */}
+                      <View style={[styles.triggerRow, isDarkMode && styles.triggerRowDark]}>
+                        <Icon name="schedule" size={12} color="#667EEA" />
+                        <Text
+                          style={[styles.triggerTextCompact, isDarkMode && styles.triggerTextDark]}
+                        >
+                          {getFormattedNextTrigger(item)}
+                        </Text>
+                      </View>
+
+                      {/* Bottom Row: Badges + Actions */}
+                      <View style={styles.bottomRow}>
+                        {/* Left: Badges */}
+                        <View style={styles.badgesRow}>
+                          <View
+                            style={[
+                              styles.categoryBadge,
+                              { backgroundColor: (item.color || '#667EEA') + '20' },
+                            ]}
+                          >
+                            <Text style={[styles.badgeText, { color: item.color || '#667EEA' }]}>
+                              {(item.category || 'General').toUpperCase()}
+                            </Text>
+                          </View>
+                          <View
+                            style={[styles.priorityBadgeSmall, { backgroundColor: priority.bg }]}
+                          >
+                            <Text style={[styles.badgeText, { color: priority.text }]}>
+                              {(item.priority || 'normal').charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                          <View style={styles.typeBadge}>
+                            <Text style={[styles.badgeText, styles.badgeTextGray]}>
+                              {(item.type || 'custom').toUpperCase()}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Right: Actions */}
+                        <View style={styles.cardActions}>
+                          <TouchableOpacity
+                            style={styles.actionButtonCompact}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              toggleReminder(item.id);
+                            }}
+                          >
+                            <Icon
+                              name={item.isActive ? 'toggle-on' : 'toggle-off'}
+                              size={22}
+                              color={item.isActive ? '#10B981' : '#9CA3AF'}
+                            />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.actionButtonCompact}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              deleteReminder(item.id);
+                            }}
+                          >
+                            <Icon name="delete-outline" size={18} color="#EF4444" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })
             ) : (
               <View style={styles.emptyState}>
                 <Icon name="event-note" size={48} color="#CBD5E1" />
@@ -979,19 +1041,189 @@ const styles = StyleSheet.create({
   reminderCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 12,
     marginBottom: 10,
-    marginHorizontal: 0,
-    elevation: 2,
+    elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    borderLeftWidth: 4,
+    borderLeftColor: '#667EEA', // Will be overridden dynamically
+    gap: 12,
+  },
+  reminderCardDark: {
+    backgroundColor: '#1a1f3a',
+    borderColor: '#3a4560',
+  },
+  reminderCardInactive: {
+    opacity: 0.6,
+  },
+  cardTypeIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardContent: {
+    flex: 1,
+    gap: 3,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  actionButtonCompact: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reminderTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+    lineHeight: 18,
+  },
+  reminderTitleDark: {
+    color: '#FFFFFF',
+  },
+  reminderDescription: {
+    fontSize: 12,
+    color: '#6B7280',
+    lineHeight: 16,
+  },
+  reminderDescriptionDark: {
+    color: '#9CA3AF',
+  },
+  textInactive: {
+    opacity: 0.6,
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+    flexWrap: 'wrap',
+  },
+  categoryBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  typeBadge: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  priorityBadgeSmall: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  badgeTextGray: {
+    color: '#6B7280',
+  },
+  triggerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F4FF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+    marginTop: 2,
+  },
+  triggerRowDark: {
+    backgroundColor: '#1F2937',
+  },
+  triggerTextCompact: {
+    fontSize: 11,
+    color: '#667EEA',
+    fontWeight: '600',
+    flex: 1,
+  },
+  triggerTextDark: {
+    color: '#93C5FD',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  priorityBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  priorityText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  triggerInfoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F4FF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    marginTop: 12,
+    gap: 8,
+  },
+  triggerInfoBoxDark: {
+    backgroundColor: '#1F2937',
+  },
+  triggerText: {
+    fontSize: 13,
+    color: '#667EEA',
+    fontWeight: '600',
+    flex: 1,
+  },
+  triggerTextDark: {
+    color: '#93C5FD',
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  typeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  typeText: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  typeTextDark: {
+    color: '#9CA3AF',
   },
   reminderIcon: {
     width: 36,

@@ -1,7 +1,9 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Audio } from 'expo-av';
 import NotificationManager from './NotificationManager';
+import { RINGTONE_FILES } from '../constants/ringtones';
 
 /**
  * NotificationService - Handles expo-notifications integration
@@ -147,9 +149,22 @@ class NotificationService {
    */
   static async handleNotificationReceived(notification) {
     try {
-      const notificationId = notification.request.content.data?.notificationId;
+      const data = notification.request.content.data;
+      const notificationId = data?.notificationId;
+
       if (notificationId) {
         await NotificationManager.updateNotificationStatus(notificationId, 'triggered');
+      }
+
+      // Play custom sound if in foreground
+      if (data?.ringTone && RINGTONE_FILES[data.ringTone]) {
+        try {
+          const { sound } = await Audio.Sound.createAsync(RINGTONE_FILES[data.ringTone], {
+            shouldPlay: true,
+          });
+        } catch (audioError) {
+          console.log('Error playing custom sound:', audioError);
+        }
       }
     } catch (error) {
       console.error('Error handling notification received:', error);
@@ -203,10 +218,15 @@ class NotificationService {
           notificationId: notificationData.id,
           reminderId: notificationData.reminderId,
           category: notificationData.category,
+          ringTone: notificationData.ringTone,
         },
         // In Expo Go, custom sounds don't work in background. We force 'default' to ensure SOME sound plays.
         // In a production build with custom assets bundled, you would use: notificationData.ringTone
-        sound: settings.soundEnabled ? 'default' : null,
+        sound: settings.soundEnabled
+          ? notificationData.ringTone
+            ? `${notificationData.ringTone}.wav`
+            : 'default'
+          : null,
         vibrate: settings.vibrationEnabled ? [0, 250, 250, 250] : [],
         priority: Notifications.AndroidNotificationPriority.HIGH,
         ...(channelId && { channelId }),

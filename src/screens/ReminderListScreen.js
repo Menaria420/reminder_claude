@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -8,9 +8,11 @@ import { ThemeContext } from '../context/ThemeContext';
 import FilterModal from '../components/FilterModal';
 import { applyAllFilters, applySorting, getActiveFilterCount } from '../utils/filterUtils';
 import { showSuccessToast, showErrorToast, showDeleteConfirm } from '../utils/ToastManager';
+import { getReminderDisplayTime, getFormattedNextTrigger } from '../utils/reminderUtils';
 
-const ReminderListScreen = ({ navigation }) => {
+const ReminderListScreen = ({ navigation, route }) => {
   const { isDarkMode } = useContext(ThemeContext);
+  const flatListRef = useRef(null);
   const [reminders, setReminders] = useState([]);
   const [filteredReminders, setFilteredReminders] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,6 +34,22 @@ const ReminderListScreen = ({ navigation }) => {
   useEffect(() => {
     filterReminders();
   }, [reminders, searchQuery, selectedFilter, filters, sortBy]);
+
+  // Handle scroll to specific reminder
+  useEffect(() => {
+    if (route.params?.scrollToId && filteredReminders.length > 0 && flatListRef.current) {
+      const index = filteredReminders.findIndex((r) => r.id === route.params.scrollToId);
+      if (index !== -1) {
+        setTimeout(() => {
+          flatListRef.current?.scrollToIndex({
+            index,
+            animated: true,
+            viewPosition: 0.5, // Center the item
+          });
+        }, 300);
+      }
+    }
+  }, [route.params?.scrollToId, filteredReminders]);
 
   const loadReminders = async () => {
     try {
@@ -134,54 +152,51 @@ const ReminderListScreen = ({ navigation }) => {
   const renderReminderItem = ({ item }) => {
     const colors = getReminderColor(item.type);
     const priorityColors = {
-      low: '#6B7280',
-      normal: '#3B82F6',
-      high: '#F59E0B',
-      urgent: '#EF4444',
+      low: { bg: '#F3F4F6', text: '#6B7280' },
+      normal: { bg: '#DBEAFE', text: '#2563EB' },
+      high: { bg: '#FEF3C7', text: '#D97706' },
+      urgent: { bg: '#FEE2E2', text: '#DC2626' },
     };
+    const priority = priorityColors[item.priority] || priorityColors.normal;
 
     return (
-      <TouchableOpacity
+      <View
         style={[
           styles.reminderCard,
           !item.isActive && styles.reminderCardInactive,
           isDarkMode && styles.reminderCardDark,
         ]}
-        activeOpacity={0.9}
       >
+        {/* Card Header - Category, Type & Priority */}
         <View style={styles.cardHeader}>
-          <LinearGradient colors={colors} style={styles.reminderIcon}>
-            <Icon name={getReminderIcon(item.type)} size={20} color="white" />
-          </LinearGradient>
-          <View style={styles.headerInfo}>
-            <Text
-              style={[
-                styles.reminderTitle,
-                !item.isActive && styles.textInactive,
-                isDarkMode && styles.reminderTitleDark,
-              ]}
-            >
-              {item.title}
-            </Text>
-            <View style={styles.typeRow}>
-              <Text style={[styles.reminderType, isDarkMode && styles.reminderTypeDark]}>
-                {item.type}
+          <View style={styles.headerLeft}>
+            <LinearGradient colors={colors} style={styles.typeIcon}>
+              <Icon name={getReminderIcon(item.type)} size={18} color="white" />
+            </LinearGradient>
+            <View style={styles.headerInfo}>
+              <Text
+                style={[
+                  styles.reminderTitle,
+                  !item.isActive && styles.textInactive,
+                  isDarkMode && styles.reminderTitleDark,
+                ]}
+                numberOfLines={2}
+              >
+                {item.title}
               </Text>
-              <View
-                style={[styles.priorityDot, { backgroundColor: priorityColors[item.priority] }]}
-              />
-              <Text style={[styles.priorityText, isDarkMode && styles.priorityTextDark]}>
-                {item.priority}
+              <Text style={[styles.categoryLabel, isDarkMode && styles.categoryLabelDark]}>
+                {item.category || 'General'} • {(item.type || 'custom').toUpperCase()}
               </Text>
             </View>
           </View>
-          <View style={styles.statusBadge}>
-            <View
-              style={[styles.statusDot, { backgroundColor: item.isActive ? '#10B981' : '#9CA3AF' }]}
-            />
+          <View style={[styles.priorityBadge, { backgroundColor: priority.bg }]}>
+            <Text style={[styles.priorityBadgeText, { color: priority.text }]}>
+              {(item.priority || 'normal').toUpperCase()}
+            </Text>
           </View>
         </View>
 
+        {/* Description */}
         {item.description && (
           <Text
             style={[
@@ -189,44 +204,64 @@ const ReminderListScreen = ({ navigation }) => {
               !item.isActive && styles.textInactive,
               isDarkMode && styles.reminderDescriptionDark,
             ]}
+            numberOfLines={2}
           >
             {item.description}
           </Text>
         )}
 
-        <View style={styles.cardFooter}>
-          <View style={styles.metaInfo}>
-            <View style={[styles.metaChip, isDarkMode && styles.metaChipDark]}>
-              <Icon name="label" size={12} color="#6B7280" />
-              <Text style={[styles.metaText, isDarkMode && styles.metaTextDark]}>
-                {item.category}
-              </Text>
-            </View>
-            <View style={[styles.metaChip, isDarkMode && styles.metaChipDark]}>
-              <Icon name="schedule" size={12} color="#6B7280" />
-              <Text style={[styles.metaText, isDarkMode && styles.metaTextDark]}>Daily</Text>
-            </View>
+        {/* Next Trigger - Prominent */}
+        <View style={[styles.triggerInfoBox, isDarkMode && styles.triggerInfoBoxDark]}>
+          <Icon name="schedule" size={16} color="#667EEA" />
+          <Text style={[styles.triggerInfoText, isDarkMode && styles.triggerInfoTextDark]}>
+            {getFormattedNextTrigger(item)}
+          </Text>
+        </View>
+
+        {/* Additional Info Row */}
+        <View style={styles.infoRow}>
+          <View style={[styles.infoChip, isDarkMode && styles.infoChipDark]}>
+            <Icon name="volume-up" size={12} color="#6B7280" />
+            <Text style={[styles.infoText, isDarkMode && styles.infoTextDark]}>
+              {item.ringTone || 'default'}
+            </Text>
           </View>
-          <View style={styles.cardActions}>
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.toggleBtn]}
-              onPress={() => toggleReminder(item.id)}
-            >
-              <Icon
-                name={item.isActive ? 'pause' : 'play-arrow'}
-                size={18}
-                color={item.isActive ? '#F59E0B' : '#10B981'}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.deleteBtn]}
-              onPress={() => deleteReminder(item.id)}
-            >
-              <Icon name="delete-outline" size={18} color="#EF4444" />
-            </TouchableOpacity>
+          <View
+            style={[styles.statusChip, { backgroundColor: item.isActive ? '#ECFDF5' : '#F3F4F6' }]}
+          >
+            <View
+              style={[styles.statusDot, { backgroundColor: item.isActive ? '#10B981' : '#9CA3AF' }]}
+            />
+            <Text style={[styles.statusText, { color: item.isActive ? '#10B981' : '#9CA3AF' }]}>
+              {item.isActive ? 'Active' : 'Paused'}
+            </Text>
           </View>
         </View>
-      </TouchableOpacity>
+
+        {/* Action Buttons */}
+        <View style={styles.cardActions}>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.toggleBtn]}
+            onPress={() => toggleReminder(item.id)}
+          >
+            <Icon
+              name={item.isActive ? 'pause' : 'play-arrow'}
+              size={18}
+              color={item.isActive ? '#F59E0B' : '#10B981'}
+            />
+            <Text style={[styles.actionBtnText, { color: item.isActive ? '#F59E0B' : '#10B981' }]}>
+              {item.isActive ? 'Pause' : 'Resume'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.deleteBtn]}
+            onPress={() => deleteReminder(item.id)}
+          >
+            <Icon name="delete-outline" size={18} color="#EF4444" />
+            <Text style={[styles.actionBtnText, { color: '#EF4444' }]}>Delete</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     );
   };
 
@@ -543,19 +578,25 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  reminderIcon: {
-    width: 40,
-    height: 40,
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flex: 1,
+  },
+  typeIcon: {
+    width: 36,
+    height: 36,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerInfo: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 10,
   },
   reminderTitle: {
     fontSize: 16,
@@ -565,42 +606,6 @@ const styles = StyleSheet.create({
   },
   reminderTitleDark: {
     color: '#ffffff',
-  },
-  typeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  reminderType: {
-    fontSize: 12,
-    color: '#6B7280',
-    textTransform: 'capitalize',
-    fontWeight: '500',
-  },
-  reminderTypeDark: {
-    color: '#9CA3AF',
-  },
-  priorityDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginHorizontal: 8,
-  },
-  priorityText: {
-    fontSize: 12,
-    color: '#6B7280',
-    textTransform: 'capitalize',
-    fontWeight: '500',
-  },
-  priorityTextDark: {
-    color: '#9CA3AF',
-  },
-  statusBadge: {
-    alignItems: 'center',
-  },
-  statusDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
   },
   reminderDescription: {
     fontSize: 14,
@@ -612,51 +617,117 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
   },
   textInactive: {
+    opacity: 0.6,
+    textDecorationLine: 'line-through',
+  },
+  categoryLabel: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginTop: 4,
+  },
+  categoryLabelDark: {
     color: '#9CA3AF',
   },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  priorityBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginLeft: 8,
   },
-  metaInfo: {
+  priorityBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  triggerInfoBox: {
     flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F4FF',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 12,
     gap: 8,
   },
-  metaChip: {
+  triggerInfoBoxDark: {
+    backgroundColor: '#1F2937',
+  },
+  triggerInfoText: {
+    fontSize: 13,
+    color: '#667EEA',
+    fontWeight: '600',
+    flex: 1,
+  },
+  triggerInfoTextDark: {
+    color: '#93C5FD',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    gap: 8,
+  },
+  infoChip: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    gap: 4,
+    flex: 1,
   },
-  metaChipDark: {
+  infoChipDark: {
     backgroundColor: '#2a2f4a',
-    borderColor: '#3a4560',
   },
-  metaText: {
+  infoText: {
     fontSize: 11,
-    color: '#64748B',
-    marginLeft: 4,
-    textTransform: 'capitalize',
+    color: '#6B7280',
     fontWeight: '500',
+    textTransform: 'capitalize',
   },
-  metaTextDark: {
+  infoTextDark: {
     color: '#9CA3AF',
+  },
+  statusChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 4,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   cardActions: {
     flexDirection: 'row',
     gap: 8,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
   },
   actionBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    justifyContent: 'center',
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+  },
+  actionBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   toggleBtn: {
     backgroundColor: '#F0FDF4',

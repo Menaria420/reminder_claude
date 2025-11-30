@@ -195,6 +195,20 @@ const CreateReminderScreen = ({ navigation }) => {
         return `${reminderData.monthlyDate}${getDaySuffix(reminderData.monthlyDate)} of each month`;
       }
 
+      if (reminderData.type === 'custom') {
+        const { customSettings } = reminderData;
+        const time = new Date(customSettings.time).toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        if (customSettings.dateRepeat === 'every') return `Daily at ${time}`;
+        if (customSettings.monthRepeat === 'every')
+          return `Monthly on ${customSettings.date}${getDaySuffix(customSettings.date)} at ${time}`;
+        if (customSettings.yearRepeat === 'every')
+          return `Yearly on ${customSettings.month}/${customSettings.date} at ${time}`;
+        return `${customSettings.month}/${customSettings.date}/${customSettings.year} at ${time}`;
+      }
+
       return 'Soon';
     } catch (error) {
       return 'Soon';
@@ -506,6 +520,41 @@ const CreateReminderScreen = ({ navigation }) => {
             // Set to last day of current month
             triggerTime.setMonth(triggerTime.getMonth() + 1, 0);
           }
+        } else if (reminderData.type === 'custom') {
+          const { customSettings } = reminderData;
+          triggerTime = new Date(customSettings.time);
+
+          // Set Year
+          if (customSettings.yearRepeat === 'specific') {
+            triggerTime.setFullYear(customSettings.year);
+          } else {
+            triggerTime.setFullYear(new Date().getFullYear());
+          }
+
+          // Set Month
+          if (customSettings.monthRepeat === 'specific') {
+            triggerTime.setMonth(customSettings.month - 1); // 0-indexed
+          } else {
+            triggerTime.setMonth(new Date().getMonth());
+          }
+
+          // Set Date
+          if (customSettings.dateRepeat === 'specific') {
+            triggerTime.setDate(customSettings.date);
+          } else {
+            triggerTime.setDate(new Date().getDate());
+          }
+
+          // If calculated time is in the past, adjust based on repetition
+          if (triggerTime < new Date()) {
+            if (customSettings.dateRepeat === 'every') {
+              triggerTime.setDate(triggerTime.getDate() + 1);
+            } else if (customSettings.monthRepeat === 'every') {
+              triggerTime.setMonth(triggerTime.getMonth() + 1);
+            } else if (customSettings.yearRepeat === 'every') {
+              triggerTime.setFullYear(triggerTime.getFullYear() + 1);
+            }
+          }
         } else {
           // Default to 1 hour from now
           triggerTime.setHours(triggerTime.getHours() + 1);
@@ -553,14 +602,14 @@ const CreateReminderScreen = ({ navigation }) => {
 
   const renderStepIndicator = () => (
     <View style={[styles.stepIndicatorContainer, isDarkMode && styles.stepIndicatorContainerDark]}>
-      {[1, 2, 3].map((step) => (
+      {[1, 2, 3, 4].map((step) => (
         <View key={step} style={styles.stepWrapper}>
           <View style={[styles.stepCircle, currentStep >= step && styles.stepCircleActive]}>
             <Text style={[styles.stepText, currentStep >= step && styles.stepTextActive]}>
               {step}
             </Text>
           </View>
-          {step < 3 && (
+          {step < 4 && (
             <View style={[styles.stepLine, currentStep > step && styles.stepLineActive]} />
           )}
         </View>
@@ -1628,7 +1677,7 @@ const CreateReminderScreen = ({ navigation }) => {
           <Text style={styles.headerTitle}>Create Reminder</Text>
           {/* Create Button */}
           <TouchableOpacity
-            onPress={currentStep === 3 ? handleCreateReminder : handleNext}
+            onPress={currentStep === 4 ? handleCreateReminder : handleNext}
             style={styles.checkButton}
           >
             <Icon name="check" size={24} color="white" />
@@ -1686,6 +1735,11 @@ const CreateReminderScreen = ({ navigation }) => {
                 setReminderData({ ...reminderData, fifteenDaysTime: selectedTime });
               } else if (reminderData.type === 'monthly') {
                 setReminderData({ ...reminderData, monthlyTime: selectedTime });
+              } else if (reminderData.type === 'custom') {
+                setReminderData({
+                  ...reminderData,
+                  customSettings: { ...reminderData.customSettings, time: selectedTime },
+                });
               }
             }
           }}
@@ -2522,6 +2576,34 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 16,
     marginBottom: 16,
+  },
+  chipScroll: {
+    marginBottom: 16,
+    maxHeight: 50,
+  },
+  chip: {
+    backgroundColor: 'white',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    minWidth: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipActive: {
+    backgroundColor: '#EF4444',
+    borderColor: '#EF4444',
+  },
+  chipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  chipTextActive: {
+    color: 'white',
   },
   continueButton: {
     marginTop: 20,

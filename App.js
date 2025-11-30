@@ -3,7 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { LogBox, ActivityIndicator, View } from 'react-native';
+import { LogBox, ActivityIndicator, View, useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import HomeScreen from './src/screens/HomeScreen';
 import CreateReminderScreen from './src/screens/CreateReminderScreen';
@@ -122,17 +122,18 @@ const Navigation = () => {
 };
 
 export default function App() {
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const systemColorScheme = useColorScheme();
+  const [isDarkMode, setIsDarkMode] = useState(systemColorScheme === 'dark');
   const [themeLoaded, setThemeLoaded] = useState(false);
+  const [hasManualPreference, setHasManualPreference] = useState(false);
 
-  // Load theme preference and initialize notification service on startup
+  // Initialize theme based on system, ignore any saved preferences
   useEffect(() => {
     const loadTheme = async () => {
       try {
-        const savedTheme = await AsyncStorage.getItem('theme_mode');
-        if (savedTheme) {
-          setIsDarkMode(savedTheme === 'dark');
-        }
+        // ALWAYS start with system theme
+        setIsDarkMode(systemColorScheme === 'dark');
+        setHasManualPreference(false);
         setThemeLoaded(true);
       } catch (error) {
         console.error('Error loading theme:', error);
@@ -156,15 +157,24 @@ export default function App() {
     return () => {
       NotificationService.cleanup();
     };
-  }, []);
+  }, [systemColorScheme]);
+
+  // Listen to system theme changes in real-time (only if user hasn't manually toggled in this session)
+  useEffect(() => {
+    if (themeLoaded && !hasManualPreference) {
+      setIsDarkMode(systemColorScheme === 'dark');
+    }
+  }, [systemColorScheme, themeLoaded, hasManualPreference]);
 
   const toggleTheme = async () => {
     try {
       const newMode = !isDarkMode;
       setIsDarkMode(newMode);
-      await AsyncStorage.setItem('theme_mode', newMode ? 'dark' : 'light');
+      // Mark as manual preference for THIS session only
+      setHasManualPreference(true);
+      // Don't save to AsyncStorage - let it reset to system on next app launch
     } catch (error) {
-      console.error('Error saving theme:', error);
+      console.error('Error toggling theme:', error);
     }
   };
 
