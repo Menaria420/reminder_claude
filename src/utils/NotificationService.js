@@ -207,6 +207,21 @@ class NotificationService {
         ? new Date(triggerTime)
         : new Date(notificationData.scheduledTime);
 
+      console.log('⏰ SCHEDULING NOTIFICATION:');
+      console.log('  - Title:', notificationData.title);
+      console.log('  - Trigger Time (input):', triggerTime?.toISOString());
+      console.log('  - Trigger Time (parsed):', trigger.toISOString());
+      console.log('  - Trigger Hours:', trigger.getHours());
+      console.log('  - Trigger Minutes:', trigger.getMinutes());
+      console.log('  - Trigger Seconds:', trigger.getSeconds());
+      console.log('  - Trigger Milliseconds:', trigger.getMilliseconds());
+      console.log('  - Current Time:', new Date().toISOString());
+      console.log('  - Time until trigger (ms):', trigger.getTime() - Date.now());
+      console.log(
+        '  - Time until trigger (minutes):',
+        Math.round((trigger.getTime() - Date.now()) / 60000)
+      );
+
       // Get channel ID based on category
       const channelId =
         Platform.OS === 'android' ? notificationData.category || 'default' : undefined;
@@ -232,12 +247,21 @@ class NotificationService {
         ...(channelId && { channelId }),
       };
 
+      // Use exact timestamp for more precise scheduling
+      const exactTrigger = {
+        type: 'date',
+        date: trigger.getTime(), // Use timestamp instead of Date object
+        repeats: false,
+      };
+
+      console.log('  - Using exact trigger with timestamp:', trigger.getTime());
+
       const scheduledNotificationId = await Notifications.scheduleNotificationAsync({
         content: notificationContent,
-        trigger,
+        trigger: exactTrigger,
       });
 
-      console.log('Notification scheduled:', scheduledNotificationId);
+      console.log('✅ Notification scheduled with ID:', scheduledNotificationId);
       return scheduledNotificationId;
     } catch (error) {
       console.error('Error scheduling notification:', error);

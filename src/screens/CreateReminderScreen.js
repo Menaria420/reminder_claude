@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -27,8 +27,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
-const CreateReminderScreen = ({ navigation }) => {
+const CreateReminderScreen = ({ navigation, route }) => {
   const { isDarkMode } = React.useContext(ThemeContext);
+  const editMode = route?.params?.editMode || false;
+  const existingReminder = route?.params?.reminder || null;
+
   const [currentStep, setCurrentStep] = useState(1);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -42,42 +45,75 @@ const CreateReminderScreen = ({ navigation }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
-  const [reminderData, setReminderData] = useState({
-    category: '',
-    title: '',
-    description: '',
-    medicineName: '',
-    dosage: '',
-    exerciseName: '',
-    duration: '',
-    habitName: '',
-    goal: '',
-    type: '',
-    hourlyInterval: 1,
-    hourlyStartTime: new Date(),
-    weeklyDays: [],
-    weeklyDays: [],
-    weeklyTimes: {}, // Changed to object for per-day times: { 'Mon': ['9:00 AM'], ... }
-    timeMethod: 'specific',
-    fifteenDaysStart: new Date(),
-    fifteenDaysTime: new Date(),
-    monthlyDate: 1,
-    monthlyTime: new Date(),
-    dateRepeat: 'specific',
-    notificationSound: 'default',
-    ringTone: 'default',
-    priority: 'normal',
-    customSettings: {
-      yearRepeat: 'specific',
-      year: new Date().getFullYear(),
-      monthRepeat: 'specific',
-      month: new Date().getMonth() + 1,
-      dateRepeat: 'specific',
-      date: new Date().getDate(),
-      time: new Date(),
-    },
-    goal: '',
-  });
+  const [reminderData, setReminderData] = useState(
+    editMode && existingReminder
+      ? {
+          ...existingReminder,
+          // Ensure dates are Date objects
+          hourlyStartTime: existingReminder.hourlyStartTime
+            ? new Date(existingReminder.hourlyStartTime)
+            : new Date(),
+          fifteenDaysStart: existingReminder.fifteenDaysStart
+            ? new Date(existingReminder.fifteenDaysStart)
+            : new Date(),
+          fifteenDaysTime: existingReminder.fifteenDaysTime
+            ? new Date(existingReminder.fifteenDaysTime)
+            : new Date(),
+          monthlyTime: existingReminder.monthlyTime
+            ? new Date(existingReminder.monthlyTime)
+            : new Date(),
+          customSettings: existingReminder.customSettings
+            ? {
+                ...existingReminder.customSettings,
+                time: new Date(existingReminder.customSettings.time),
+              }
+            : {
+                yearRepeat: 'specific',
+                year: new Date().getFullYear(),
+                monthRepeat: 'specific',
+                month: new Date().getMonth() + 1,
+                dateRepeat: 'specific',
+                date: new Date().getDate(),
+                time: new Date(),
+              },
+        }
+      : {
+          category: '',
+          categoryTag: '', // Step 4 category (Personal, Work, Health, Family)
+          title: '',
+          description: '',
+          medicineName: '',
+          dosage: '',
+          exerciseName: '',
+          duration: '',
+          habitName: '',
+          goal: '',
+          type: '',
+          hourlyInterval: 1,
+          hourlyStartTime: new Date(),
+          weeklyDays: [],
+          weeklyTimes: {}, // Changed to object for per-day times: { 'Mon': ['9:00 AM'], ... }
+          timeMethod: 'specific',
+          fifteenDaysStart: new Date(),
+          fifteenDaysTime: new Date(),
+          monthlyDate: 1,
+          monthlyTime: new Date(),
+          dateRepeat: 'specific',
+          notificationSound: 'default',
+          ringTone: 'default',
+          priority: 'normal',
+          customSettings: {
+            yearRepeat: 'specific',
+            year: new Date().getFullYear(),
+            monthRepeat: 'specific',
+            month: new Date().getMonth() + 1,
+            dateRepeat: 'specific',
+            date: new Date().getDate(),
+            time: new Date(),
+          },
+          goal: '',
+        }
+  );
 
   const reminderTypes = [
     {
@@ -215,6 +251,24 @@ const CreateReminderScreen = ({ navigation }) => {
     }
   };
 
+  // Debug: Log reminder data in edit mode
+  useEffect(() => {
+    if (editMode && existingReminder) {
+      console.log('📝 EDIT MODE - Loaded Reminder Data:');
+      console.log('  - Category:', reminderData.category);
+      console.log('  - Type:', reminderData.type);
+      console.log('  - Title:', reminderData.title);
+      console.log('  - Medicine Name:', reminderData.medicineName);
+      console.log('  - Exercise Name:', reminderData.exerciseName);
+      console.log('  - Habit Name:', reminderData.habitName);
+      console.log('  - Priority:', reminderData.priority);
+      console.log('  - Ring Tone:', reminderData.ringTone);
+      console.log('  - Weekly Days:', reminderData.weeklyDays);
+      console.log('  - Hourly Interval:', reminderData.hourlyInterval);
+      console.log('  - Monthly Date:', reminderData.monthlyDate);
+    }
+  }, [editMode]);
+
   const getDaySuffix = (day) => {
     if (day > 3 && day < 21) return 'th';
     switch (day % 10) {
@@ -241,6 +295,11 @@ const CreateReminderScreen = ({ navigation }) => {
     // If we are in a specific flow that needs type selection, move to next step
     // Otherwise, this might be part of the form
     if (currentStep === 2 && reminderData.category === 'others') {
+      // Validate title before moving to next step
+      if (!reminderData.title || !reminderData.title.trim()) {
+        Alert.alert('Required Field', 'Please enter a title before selecting reminder type');
+        return;
+      }
       setCurrentStep(3);
     }
   };
@@ -322,9 +381,17 @@ const CreateReminderScreen = ({ navigation }) => {
           Alert.alert('Required Field', 'Please enter exercise name');
           return false;
         }
+        if (!reminderData.type) {
+          Alert.alert('Required Field', 'Please select frequency');
+          return false;
+        }
       } else if (category === 'habits') {
         if (!reminderData.habitName.trim()) {
           Alert.alert('Required Field', 'Please enter habit name');
+          return false;
+        }
+        if (!reminderData.type) {
+          Alert.alert('Required Field', 'Please select frequency');
           return false;
         }
       } else if (category === 'others') {
@@ -356,6 +423,28 @@ const CreateReminderScreen = ({ navigation }) => {
           return false;
         }
       }
+
+      // Validate custom reminder has all required settings
+      if (reminderData.type === 'custom') {
+        // Ensure title is set for custom reminders
+        if (!reminderData.title || !reminderData.title.trim()) {
+          Alert.alert('Required Field', 'Please enter a title for your reminder');
+          return false;
+        }
+
+        // Title is already validated in step 2, just ensure custom settings are reasonable
+        const { customSettings } = reminderData;
+        if (!customSettings || !customSettings.time) {
+          Alert.alert('Required Field', 'Please set a time for your custom reminder');
+          return false;
+        }
+      }
+
+      // Final check: ensure title is never empty for any reminder type
+      if (!reminderData.title || !reminderData.title.trim()) {
+        Alert.alert('Required Field', 'Please enter a title for your reminder');
+        return false;
+      }
     }
 
     return true;
@@ -386,23 +475,68 @@ const CreateReminderScreen = ({ navigation }) => {
     setLoading(true);
 
     try {
-      // Create reminder object with unique ID and timestamp
-      const newReminder = {
-        id: `reminder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        ...reminderData,
-        createdAt: new Date().toISOString(),
-        isActive: true,
-      };
-
       // Get existing reminders from AsyncStorage
       const existingReminders = await AsyncStorage.getItem('reminders');
       const reminders = existingReminders ? JSON.parse(existingReminders) : [];
 
-      // Add new reminder
-      reminders.push(newReminder);
+      let updatedReminder;
+      let updatedReminders;
+
+      if (editMode && existingReminder) {
+        // Update existing reminder - preserve ID and createdAt
+        updatedReminder = {
+          ...reminderData,
+          id: existingReminder.id,
+          createdAt: existingReminder.createdAt,
+          updatedAt: new Date().toISOString(),
+          isActive: existingReminder.isActive, // Preserve active state
+        };
+
+        // Replace the old reminder with updated one
+        updatedReminders = reminders.map((r) =>
+          r.id === existingReminder.id ? updatedReminder : r
+        );
+      } else {
+        // Create new reminder with unique ID and timestamp
+        updatedReminder = {
+          id: `reminder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          ...reminderData,
+          createdAt: new Date().toISOString(),
+          isActive: true,
+        };
+
+        // Add new reminder
+        updatedReminders = [...reminders, updatedReminder];
+      }
+
+      console.log('💾 Saving Reminder:');
+      console.log('  - Type:', updatedReminder.type);
+      console.log('  - Category:', updatedReminder.category);
+      console.log('  - Title:', updatedReminder.title);
+
+      if (updatedReminder.type === 'hourly') {
+        console.log('  - hourlyStartTime:', updatedReminder.hourlyStartTime);
+        console.log('  - hourlyInterval:', updatedReminder.hourlyInterval);
+        if (updatedReminder.hourlyStartTime) {
+          const time = new Date(updatedReminder.hourlyStartTime);
+          console.log('  - Parsed hours:', time.getHours());
+          console.log('  - Parsed minutes:', time.getMinutes());
+        }
+      } else if (updatedReminder.type === 'weekly') {
+        console.log('  - weeklyDays:', updatedReminder.weeklyDays);
+        console.log('  - weeklyTimes:', updatedReminder.weeklyTimes);
+        console.log('  - weeklyDays length:', updatedReminder.weeklyDays?.length);
+        console.log('  - weeklyTimes keys:', Object.keys(updatedReminder.weeklyTimes || {}));
+      } else if (updatedReminder.type === '15days') {
+        console.log('  - fifteenDaysStart:', updatedReminder.fifteenDaysStart);
+        console.log('  - fifteenDaysTime:', updatedReminder.fifteenDaysTime);
+      } else if (updatedReminder.type === 'monthly') {
+        console.log('  - monthlyDate:', updatedReminder.monthlyDate);
+        console.log('  - monthlyTime:', updatedReminder.monthlyTime);
+      }
 
       // Save to AsyncStorage
-      await AsyncStorage.setItem('reminders', JSON.stringify(reminders));
+      await AsyncStorage.setItem('reminders', JSON.stringify(updatedReminders));
 
       // Create notification if notification system is enabled
       try {
@@ -503,13 +637,28 @@ const CreateReminderScreen = ({ navigation }) => {
             triggerTime.setHours(9, 0, 0, 0);
           }
         } else if (reminderData.type === '15days') {
+          console.log('📅 15-Day Reminder Trigger Calculation:');
+          console.log('  - fifteenDaysTime:', reminderData.fifteenDaysTime);
+          console.log('  - fifteenDaysStart:', reminderData.fifteenDaysStart);
+
           triggerTime = new Date(reminderData.fifteenDaysTime);
+          console.log('  - Initial trigger from time:', triggerTime.toISOString());
+          console.log('  - Hours:', triggerTime.getHours());
+          console.log('  - Minutes:', triggerTime.getMinutes());
+          console.log('  - Seconds:', triggerTime.getSeconds());
+          console.log('  - Milliseconds:', triggerTime.getMilliseconds());
+
           // Set date to start date
           const startDate = new Date(reminderData.fifteenDaysStart);
           if (!isNaN(startDate.getTime())) {
+            console.log('  - Start date:', startDate.toISOString());
             triggerTime.setFullYear(startDate.getFullYear());
             triggerTime.setMonth(startDate.getMonth());
             triggerTime.setDate(startDate.getDate());
+            console.log('  - Final trigger time:', triggerTime.toISOString());
+            console.log('  - Final Hours:', triggerTime.getHours());
+            console.log('  - Final Minutes:', triggerTime.getMinutes());
+            console.log('  - Final Seconds:', triggerTime.getSeconds());
           }
         } else if (reminderData.type === 'monthly') {
           triggerTime = new Date(reminderData.monthlyTime);
@@ -576,10 +725,10 @@ const CreateReminderScreen = ({ navigation }) => {
         console.log('Final trigger time:', triggerTime.toISOString());
 
         // Create notification record
-        await NotificationManager.createNotification(newReminder, triggerTime);
+        await NotificationManager.createNotification(updatedReminder, triggerTime);
 
         // Schedule the notification
-        await NotificationService.scheduleNotification(newReminder, triggerTime);
+        await NotificationService.scheduleNotification(updatedReminder, triggerTime);
       } catch (notifError) {
         console.log('Notification setup skipped:', notifError.message);
         // Continue even if notification fails
@@ -591,12 +740,17 @@ const CreateReminderScreen = ({ navigation }) => {
       // Navigate back after showing success
       setTimeout(() => {
         setShowSuccess(false);
-        navigation.navigate('Home', { refresh: true });
+        navigation.navigate('ReminderList', { refresh: true });
       }, 2500);
     } catch (error) {
-      console.error('Error creating reminder:', error);
+      console.error(editMode ? 'Error updating reminder:' : 'Error creating reminder:', error);
       setLoading(false);
-      Alert.alert('Error', 'Failed to create reminder. Please try again.');
+      Alert.alert(
+        'Error',
+        editMode
+          ? 'Failed to update reminder. Please try again.'
+          : 'Failed to create reminder. Please try again.'
+      );
     }
   };
 
@@ -625,30 +779,53 @@ const CreateReminderScreen = ({ navigation }) => {
     );
   }
 
-  const renderCategorySelection = () => (
-    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-      <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>
-        What do you want to be reminded about?
-      </Text>
-      <View style={styles.categoryGrid}>
-        {CATEGORIES.map((cat) => (
-          <TouchableOpacity
-            key={cat.id}
-            style={[styles.categoryCard, isDarkMode && styles.categoryCardDark]}
-            onPress={() => handleSelectCategory(cat)}
-            activeOpacity={0.8}
-          >
-            <LinearGradient colors={cat.color} style={styles.categoryIcon}>
-              <Icon name={cat.icon} size={28} color="white" />
-            </LinearGradient>
-            <Text style={[styles.categoryLabel, isDarkMode && styles.categoryLabelDark]}>
-              {cat.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </Animated.View>
-  );
+  const renderCategorySelection = () => {
+    console.log('🎯 RENDERING CATEGORY SELECTION');
+    console.log('  Current reminderData.category:', reminderData.category);
+    console.log('  Edit Mode:', editMode);
+
+    return (
+      <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+        <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>
+          What do you want to be reminded about?
+        </Text>
+        <View style={styles.categoryGrid}>
+          {CATEGORIES.map((cat) => {
+            const isSelected = reminderData.category === cat.id;
+            console.log(
+              `  Category ${cat.id}: isSelected=${isSelected} (comparing '${reminderData.category}' === '${cat.id}')`
+            );
+
+            return (
+              <TouchableOpacity
+                key={cat.id}
+                style={[
+                  styles.categoryCard,
+                  isDarkMode && styles.categoryCardDark,
+                  isSelected && styles.categoryCardActive,
+                  isSelected && isDarkMode && styles.categoryCardActiveDark,
+                ]}
+                onPress={() => handleSelectCategory(cat)}
+                activeOpacity={0.8}
+              >
+                <LinearGradient colors={cat.color} style={styles.categoryIcon}>
+                  <Icon name={cat.icon} size={28} color="white" />
+                </LinearGradient>
+                <Text style={[styles.categoryLabel, isDarkMode && styles.categoryLabelDark]}>
+                  {cat.label}
+                </Text>
+                {isSelected && (
+                  <View style={styles.categorySelectedBadge}>
+                    <Icon name="check-circle" size={24} color="#10B981" />
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </Animated.View>
+    );
+  };
 
   const renderMedicationForm = () => (
     <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
@@ -677,6 +854,7 @@ const CreateReminderScreen = ({ navigation }) => {
         />
       </View>
       <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>Frequency</Text>
+      {console.log('🔄 Rendering Medication Frequency - Current type:', reminderData.type)}
       {/* Reusing reminderTypes but filtering or simplifying if needed */}
       {reminderTypes.slice(0, 2).map(
         (
@@ -688,6 +866,7 @@ const CreateReminderScreen = ({ navigation }) => {
               styles.typeCard,
               isDarkMode && styles.typeCardDark,
               reminderData.type === type.id && styles.typeCardActive,
+              reminderData.type === type.id && isDarkMode && styles.typeCardActiveDark,
             ]}
             onPress={() => setReminderData({ ...reminderData, type: type.id })}
           >
@@ -751,6 +930,7 @@ const CreateReminderScreen = ({ navigation }) => {
               styles.typeCard,
               isDarkMode && styles.typeCardDark,
               reminderData.type === type.id && styles.typeCardActive,
+              reminderData.type === type.id && isDarkMode && styles.typeCardActiveDark,
             ]}
             onPress={() => setReminderData({ ...reminderData, type: type.id })}
           >
@@ -814,6 +994,7 @@ const CreateReminderScreen = ({ navigation }) => {
               styles.typeCard,
               isDarkMode && styles.typeCardDark,
               reminderData.type === type.id && styles.typeCardActive,
+              reminderData.type === type.id && isDarkMode && styles.typeCardActiveDark,
             ]}
             onPress={() => setReminderData({ ...reminderData, type: type.id })}
           >
@@ -869,10 +1050,16 @@ const CreateReminderScreen = ({ navigation }) => {
       <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>
         Select Reminder Type
       </Text>
+      {console.log('🔄 Rendering Others Type Selection - Current type:', reminderData.type)}
       {reminderTypes.map((type) => (
         <TouchableOpacity
           key={type.id}
-          style={[styles.typeCard, isDarkMode && styles.typeCardDark]}
+          style={[
+            styles.typeCard,
+            isDarkMode && styles.typeCardDark,
+            reminderData.type === type.id && styles.typeCardActive,
+            reminderData.type === type.id && isDarkMode && styles.typeCardActiveDark,
+          ]}
           onPress={() => handleSelectType(type.id)}
           activeOpacity={0.8}
         >
@@ -885,7 +1072,7 @@ const CreateReminderScreen = ({ navigation }) => {
               {type.description}
             </Text>
           </View>
-          <Icon name="chevron-right" size={24} color="#9CA3AF" />
+          {reminderData.type === type.id && <Icon name="check-circle" size={24} color="#10B981" />}
         </TouchableOpacity>
       ))}
     </Animated.View>
@@ -1545,26 +1732,27 @@ const CreateReminderScreen = ({ navigation }) => {
         <View style={styles.optionContent}>
           <Text style={styles.optionTitle}>Category</Text>
           <View style={styles.categoryGrid}>
-            {['Personal', 'Work', 'Health', 'Family'].map((category) => (
+            {['Personal', 'Work', 'Health', 'Family'].map((categoryTag) => (
               <TouchableOpacity
-                key={category}
+                key={categoryTag}
                 style={[
                   styles.categoryChip,
-                  reminderData.category === category.toLowerCase() && styles.categoryChipActive,
+                  reminderData.categoryTag === categoryTag.toLowerCase() &&
+                    styles.categoryChipActive,
                 ]}
                 onPress={() => {
                   handleVibrate();
-                  setReminderData({ ...reminderData, category: category.toLowerCase() });
+                  setReminderData({ ...reminderData, categoryTag: categoryTag.toLowerCase() });
                 }}
               >
                 <Text
                   style={[
                     styles.categoryChipText,
-                    reminderData.category === category.toLowerCase() &&
+                    reminderData.categoryTag === categoryTag.toLowerCase() &&
                       styles.categoryChipTextActive,
                   ]}
                 >
-                  {category}
+                  {categoryTag}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -1659,7 +1847,9 @@ const CreateReminderScreen = ({ navigation }) => {
           {loading ? (
             <ActivityIndicator color="white" />
           ) : (
-            <Text style={styles.createButtonText}>Create Reminder</Text>
+            <Text style={styles.createButtonText}>
+              {editMode ? 'Update Reminder' : 'Create Reminder'}
+            </Text>
           )}
         </LinearGradient>
       </TouchableOpacity>
@@ -1674,7 +1864,7 @@ const CreateReminderScreen = ({ navigation }) => {
             <Icon name="arrow-back" size={24} color="white" />
             <Text style={styles.logoText}>Back</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create Reminder</Text>
+          <Text style={styles.headerTitle}>{editMode ? 'Edit Reminder' : 'Create Reminder'}</Text>
           {/* Create Button */}
           <TouchableOpacity
             onPress={currentStep === 4 ? handleCreateReminder : handleNext}
@@ -1727,9 +1917,19 @@ const CreateReminderScreen = ({ navigation }) => {
           mode="time"
           display="default"
           onChange={(event, selectedTime) => {
+            console.log('⏰ Time Picker Changed:');
+            console.log('  - Event:', event);
+            console.log('  - Selected Time:', selectedTime);
+            if (selectedTime) {
+              console.log('  - ISO:', selectedTime.toISOString());
+              console.log('  - Hours:', selectedTime.getHours());
+              console.log('  - Minutes:', selectedTime.getMinutes());
+            }
+
             setShowTimePicker(false);
             if (selectedTime) {
               if (reminderData.type === 'hourly') {
+                console.log('  - Saving to hourlyStartTime');
                 setReminderData({ ...reminderData, hourlyStartTime: selectedTime });
               } else if (reminderData.type === '15days') {
                 setReminderData({ ...reminderData, fifteenDaysTime: selectedTime });
@@ -2047,6 +2247,21 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  typeCardActive: {
+    backgroundColor: '#EEF2FF',
+    borderColor: '#667EEA',
+    elevation: 4,
+    shadowOpacity: 0.15,
+  },
+  typeCardDark: {
+    backgroundColor: '#2a2a2a',
+  },
+  typeCardActiveDark: {
+    backgroundColor: '#3a4560',
+    borderColor: '#667EEA',
   },
   // New compact weekly day selection styles
   weekDayChipGrid: {
@@ -2862,9 +3077,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
     overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
   categoryCardDark: {
     backgroundColor: '#2a2a2a',
+  },
+  categoryCardActive: {
+    backgroundColor: '#EEF2FF',
+    borderColor: '#667EEA',
+    elevation: 3,
+    shadowOpacity: 0.1,
+  },
+  categoryCardActiveDark: {
+    backgroundColor: '#3a4560',
+    borderColor: '#667EEA',
   },
   categoryIcon: {
     width: 56,
@@ -2882,6 +3109,11 @@ const styles = StyleSheet.create({
   },
   categoryLabelDark: {
     color: '#E5E7EB',
+  },
+  categorySelectedBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
   },
 });
 

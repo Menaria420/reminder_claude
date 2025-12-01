@@ -341,7 +341,7 @@ const HomeScreen = ({ navigation, route }) => {
 
         <View style={styles.reminderContent}>
           <Text style={[styles.reminderTitle, isDarkMode && styles.reminderTitleDark]}>
-            {item.title}
+            {item.title || 'Untitled Reminder'}
           </Text>
           <Text style={[styles.reminderType, isDarkMode && styles.reminderTypeDark]}>
             {item.type || 'Custom'} • {item.category || 'General'}
@@ -486,7 +486,7 @@ const HomeScreen = ({ navigation, route }) => {
                         ]}
                         numberOfLines={1}
                       >
-                        {item.title}
+                        {item.title || 'Untitled Reminder'}
                       </Text>
 
                       {/* Description - only render if exists */}

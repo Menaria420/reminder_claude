@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -27,9 +28,12 @@ const ReminderListScreen = ({ navigation, route }) => {
   });
   const [sortBy, setSortBy] = useState('dateNewest');
 
-  useEffect(() => {
-    loadReminders();
-  }, []);
+  // Reload reminders whenever screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadReminders();
+    }, [])
+  );
 
   useEffect(() => {
     filterReminders();
@@ -182,7 +186,7 @@ const ReminderListScreen = ({ navigation, route }) => {
                 ]}
                 numberOfLines={2}
               >
-                {item.title}
+                {item.title || 'Untitled Reminder'}
               </Text>
               <Text style={[styles.categoryLabel, isDarkMode && styles.categoryLabelDark]}>
                 {item.category || 'General'} • {(item.type || 'custom').toUpperCase()}
@@ -240,6 +244,15 @@ const ReminderListScreen = ({ navigation, route }) => {
 
         {/* Action Buttons */}
         <View style={styles.cardActions}>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.editBtn]}
+            onPress={() =>
+              navigation.navigate('CreateReminder', { editMode: true, reminder: item })
+            }
+          >
+            <Icon name="edit" size={18} color="#3B82F6" />
+            <Text style={[styles.actionBtnText, { color: '#3B82F6' }]}>Edit</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionBtn, styles.toggleBtn]}
             onPress={() => toggleReminder(item.id)}
@@ -728,6 +741,9 @@ const styles = StyleSheet.create({
   actionBtnText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  editBtn: {
+    backgroundColor: '#EFF6FF',
   },
   toggleBtn: {
     backgroundColor: '#F0FDF4',

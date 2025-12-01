@@ -25,13 +25,19 @@ const RingtoneSelector = ({ visible, onClose, selectedRingtone, onSelect }) => {
     // Configure audio mode
     const configureAudio = async () => {
       try {
+        console.log('🔧 Configuring audio mode...');
         await Audio.setAudioModeAsync({
           playsInSilentModeIOS: true,
           staysActiveInBackground: false,
           shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+          allowsRecordingIOS: false,
+          interruptionModeIOS: 1, // DoNotMix
+          interruptionModeAndroid: 1, // DoNotMix
         });
+        console.log('✅ Audio mode configured successfully');
       } catch (error) {
-        console.log('Error configuring audio:', error);
+        console.error('❌ Error configuring audio:', error);
       }
     };
     configureAudio();
@@ -44,16 +50,28 @@ const RingtoneSelector = ({ visible, onClose, selectedRingtone, onSelect }) => {
     };
   }, []);
 
+  // Cleanup sound when modal closes
+  useEffect(() => {
+    if (!visible && soundRef.current) {
+      console.log('🚪 Modal closed, cleaning up sound');
+      soundRef.current.unloadAsync();
+      soundRef.current = null;
+      setCurrentlyPlaying(null);
+    }
+  }, [visible]);
+
   const handleVibrate = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const playRingtone = async (ringtoneId) => {
     try {
+      console.log('🔊 Attempting to play ringtone:', ringtoneId);
       handleVibrate();
 
       // Stop any currently playing sound
       if (soundRef.current) {
+        console.log('⏹️ Stopping currently playing sound');
         await soundRef.current.unloadAsync();
         soundRef.current = null;
       }
@@ -62,25 +80,34 @@ const RingtoneSelector = ({ visible, onClose, selectedRingtone, onSelect }) => {
 
       // Play the specific audio file for this ringtone
       const source = RINGTONE_FILES[ringtoneId] || RINGTONE_FILES.default;
+      console.log('📁 Loading sound source for:', ringtoneId, source);
 
       const { sound } = await Audio.Sound.createAsync(
         source,
-        { shouldPlay: false } // Don't auto-play, we'll call playAsync
+        { shouldPlay: true, volume: 1.0 } // Auto-play with full volume
       );
 
+      console.log('✅ Sound created successfully');
       soundRef.current = sound;
 
       // Set up completion listener
       sound.setOnPlaybackStatusUpdate(async (status) => {
         if (status.didJustFinish) {
+          console.log('🏁 Sound finished playing');
           setCurrentlyPlaying(null);
         }
       });
 
-      // Play explicitly
-      await sound.playAsync();
+      // Get and log playback status
+      const status = await sound.getStatusAsync();
+      console.log('🎵 Playback status:', {
+        isLoaded: status.isLoaded,
+        isPlaying: status.isPlaying,
+        durationMillis: status.durationMillis,
+        positionMillis: status.positionMillis,
+      });
     } catch (error) {
-      console.log('Error playing ringtone preview:', error);
+      console.error('❌ Error playing ringtone preview:', error);
       setCurrentlyPlaying(null);
     }
   };
@@ -119,7 +146,7 @@ const RingtoneSelector = ({ visible, onClose, selectedRingtone, onSelect }) => {
               >
                 <View style={styles.ringtoneLeft}>
                   <View style={[styles.ringtoneIcon, isDarkMode && styles.ringtoneIconDark]}>
-                    <Icon name={ringtone.icon} size={24} color="#667EEA" />
+                    <Icon name={ringtone.icon} size={20} color="#667EEA" />
                   </View>
                   <View style={styles.ringtoneInfo}>
                     <Text style={[styles.ringtoneName, isDarkMode && styles.ringtoneNameDark]}>
@@ -142,14 +169,14 @@ const RingtoneSelector = ({ visible, onClose, selectedRingtone, onSelect }) => {
                   >
                     <Icon
                       name={currentlyPlaying === ringtone.id ? 'stop' : 'play-arrow'}
-                      size={24}
+                      size={20}
                       color="#667EEA"
                     />
                   </TouchableOpacity>
 
                   {/* Selected Indicator */}
                   {selectedRingtone === ringtone.id && (
-                    <Icon name="check-circle" size={24} color="#10B981" />
+                    <Icon name="check-circle" size={20} color="#10B981" />
                   )}
                 </View>
               </TouchableOpacity>
@@ -180,12 +207,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    padding: 16,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: 'white',
   },
@@ -193,16 +220,16 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   ringtoneList: {
-    padding: 16,
+    padding: 12,
   },
   ringtoneItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    padding: 12,
     backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    marginBottom: 12,
+    borderRadius: 10,
+    marginBottom: 8,
     borderWidth: 2,
     borderColor: 'transparent',
   },
@@ -216,13 +243,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   ringtoneIcon: {
-    width: 48,
-    height: 48,
+    width: 40,
+    height: 40,
     backgroundColor: '#F0F4FF',
-    borderRadius: 12,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 10,
   },
   ringtoneIconDark: {
     backgroundColor: '#2a2f4a',
@@ -231,16 +258,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   ringtoneName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: '#111827',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   ringtoneNameDark: {
     color: '#ffffff',
   },
   ringtoneDesc: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6B7280',
   },
   ringtoneDescDark: {
@@ -249,13 +276,13 @@ const styles = StyleSheet.create({
   ringtoneRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   playButton: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     backgroundColor: '#F0F4FF',
-    borderRadius: 20,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
   },
