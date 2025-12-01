@@ -521,7 +521,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 8, // Reduced from 12 to 8
     marginBottom: 16,
   },
   searchContainerDark: {

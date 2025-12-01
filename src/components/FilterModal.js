@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: height * 0.85,
+    height: height * 0.85,
   },
   modalContainerDark: {
     backgroundColor: '#0a0e27',
