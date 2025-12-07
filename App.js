@@ -127,13 +127,18 @@ export default function App() {
   const [themeLoaded, setThemeLoaded] = useState(false);
   const [hasManualPreference, setHasManualPreference] = useState(false);
 
-  // Initialize theme based on system, ignore any saved preferences
+  // Initialize theme
   useEffect(() => {
     const loadTheme = async () => {
       try {
-        // ALWAYS start with system theme
-        setIsDarkMode(systemColorScheme === 'dark');
-        setHasManualPreference(false);
+        const savedTheme = await AsyncStorage.getItem('theme');
+        if (savedTheme !== null) {
+          setIsDarkMode(savedTheme === 'dark');
+          setHasManualPreference(true);
+        } else {
+          setIsDarkMode(systemColorScheme === 'dark');
+          setHasManualPreference(false);
+        }
         setThemeLoaded(true);
       } catch (error) {
         console.error('Error loading theme:', error);
@@ -159,7 +164,7 @@ export default function App() {
     };
   }, [systemColorScheme]);
 
-  // Listen to system theme changes in real-time (only if user hasn't manually toggled in this session)
+  // Listen to system theme changes in real-time (only if user hasn't manually toggled)
   useEffect(() => {
     if (themeLoaded && !hasManualPreference) {
       setIsDarkMode(systemColorScheme === 'dark');
@@ -170,9 +175,8 @@ export default function App() {
     try {
       const newMode = !isDarkMode;
       setIsDarkMode(newMode);
-      // Mark as manual preference for THIS session only
       setHasManualPreference(true);
-      // Don't save to AsyncStorage - let it reset to system on next app launch
+      await AsyncStorage.setItem('theme', newMode ? 'dark' : 'light');
     } catch (error) {
       console.error('Error toggling theme:', error);
     }

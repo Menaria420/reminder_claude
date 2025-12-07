@@ -1,24 +1,20 @@
 import React, { useState, useContext, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemeContext } from '../context/ThemeContext';
 import { AuthContext } from '../context/AuthContext';
 import RingtoneSelector from '../components/RingtoneSelector';
 import NotificationSettingsModal from '../components/NotificationSettingsModal';
 import NotificationService from '../utils/NotificationService';
+import NotificationManager from '../utils/NotificationManager';
 
 const SettingsScreen = ({ navigation }) => {
   console.log('SettingsScreen rendered');
   const { isDarkMode, toggleTheme } = useContext(ThemeContext);
   const { logout, user } = useContext(AuthContext);
-  const [settings, setSettings] = useState({
-    notifications: true,
-    sound: true,
-    vibration: true,
-    autoBackup: true,
-  });
 
   const [showRingtoneSelector, setShowRingtoneSelector] = useState(false);
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
@@ -46,12 +42,80 @@ const SettingsScreen = ({ navigation }) => {
     await NotificationService.saveNotificationSettings(newSettings);
     setNotificationSettings(newSettings);
     Alert.alert('Success', 'Notification settings saved!');
+    // Apply new settings to existing notifications
+    NotificationService.rescheduleAllNotifications();
   };
 
   const handleSelectRingtone = async (ringtoneId) => {
     const updatedSettings = { ...notificationSettings, defaultRingtone: ringtoneId };
     await NotificationService.saveNotificationSettings(updatedSettings);
     setNotificationSettings(updatedSettings);
+    // Apply new ringtone to existing notifications
+    NotificationService.rescheduleAllNotifications();
+  };
+
+  const toggleSetting = async (key) => {
+    const updatedSettings = { ...notificationSettings, [key]: !notificationSettings[key] };
+    setNotificationSettings(updatedSettings);
+    await NotificationService.saveNotificationSettings(updatedSettings);
+    // Apply new settings (sound/vibration) to existing notifications
+    NotificationService.rescheduleAllNotifications();
+  };
+
+  const handleExportData = async () => {
+    try {
+      const reminders = await AsyncStorage.getItem('reminders');
+      if (!reminders) {
+        Alert.alert('No Data', 'There are no reminders to export.');
+        return;
+      }
+
+      const result = await Share.share({
+        message: reminders,
+        title: 'RemindMe Data Export',
+      });
+
+      if (result.action === Share.sharedAction) {
+        if (result.activityType) {
+          // shared with activity type of result.activityType
+        } else {
+          // shared
+        }
+      } else if (result.action === Share.dismissedAction) {
+        // dismissed
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to export data: ' + error.message);
+    }
+  };
+
+  const handleClearAllData = () => {
+    Alert.alert(
+      'Warning',
+      'This will permanently delete ALL your reminders and notification history. This action cannot be undone. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Everything',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await AsyncStorage.removeItem('reminders');
+              await AsyncStorage.removeItem('notifications');
+              // Optionally clear settings too, but usually users want to keep prefs
+              // await AsyncStorage.removeItem('notificationSettings');
+
+              // Cancel all scheduled notifications
+              await NotificationService.cancelAllNotifications();
+
+              Alert.alert('Success', 'All data has been cleared.');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to clear data: ' + error.message);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const getRingtoneName = (id) => {
@@ -88,21 +152,21 @@ const SettingsScreen = ({ navigation }) => {
       title: 'Notifications',
       subtitle: 'Receive reminder notifications',
       icon: 'notifications',
-      key: 'notifications',
+      key: 'notificationsEnabled',
       type: 'toggle',
     },
     {
       title: 'Sound',
       subtitle: 'Play sound for notifications',
       icon: 'volume-up',
-      key: 'sound',
+      key: 'soundEnabled',
       type: 'toggle',
     },
     {
       title: 'Vibration',
       subtitle: 'Vibrate on notifications',
       icon: 'vibration',
-      key: 'vibration',
+      key: 'vibrationEnabled',
       type: 'toggle',
     },
     {
@@ -113,33 +177,18 @@ const SettingsScreen = ({ navigation }) => {
       type: 'theme',
     },
     {
-      title: 'Auto Backup',
-      subtitle: 'Automatically backup reminders',
-      icon: 'backup',
-      key: 'autoBackup',
-      type: 'toggle',
-    },
-    {
       title: 'Export Data',
-      subtitle: 'Export all reminders',
+      subtitle: 'Export all reminders as JSON',
       icon: 'file-download',
       type: 'action',
-      action: () => Alert.alert('Export', 'Data exported successfully!'),
+      action: handleExportData,
     },
     {
       title: 'Clear All Data',
-      subtitle: 'Delete all reminders',
+      subtitle: 'Delete all reminders permanently',
       icon: 'delete-forever',
       type: 'action',
-      action: () =>
-        Alert.alert('Warning', 'This will delete all data. Continue?', [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: () => Alert.alert('Deleted', 'All data cleared!'),
-          },
-        ]),
+      action: handleClearAllData,
     },
     {
       title: 'Logout',
@@ -149,13 +198,6 @@ const SettingsScreen = ({ navigation }) => {
       action: handleLogout,
     },
   ];
-
-  const toggleSetting = (key) => {
-    setSettings((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
-  };
 
   console.log('SettingsScreen rendering with isDarkMode:', isDarkMode);
 
@@ -267,9 +309,9 @@ const SettingsScreen = ({ navigation }) => {
 
               {option.type === 'toggle' ? (
                 <Icon
-                  name={settings[option.key] ? 'toggle-on' : 'toggle-off'}
+                  name={notificationSettings[option.key] ? 'toggle-on' : 'toggle-off'}
                   size={32}
-                  color={settings[option.key] ? '#10B981' : '#9CA3AF'}
+                  color={notificationSettings[option.key] ? '#10B981' : '#9CA3AF'}
                 />
               ) : option.type === 'theme' ? (
                 <Icon

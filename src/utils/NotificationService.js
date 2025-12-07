@@ -44,6 +44,9 @@ class NotificationService {
       // Run cleanup on initialization
       await NotificationManager.cleanupOldNotifications();
 
+      // Set up notification categories (Snooze/Complete)
+      await this.setupCategories();
+
       console.log('NotificationService initialized');
       return true;
     } catch (error) {
@@ -75,6 +78,33 @@ class NotificationService {
     } catch (error) {
       console.error('Error requesting notification permissions:', error);
       return false;
+    }
+  }
+
+  /**
+   * Set up notification categories
+   */
+  static async setupCategories() {
+    try {
+      await Notifications.setNotificationCategoryAsync('reminder', [
+        {
+          identifier: 'snooze',
+          buttonTitle: 'Snooze',
+          options: {
+            opensAppToForeground: false,
+          },
+        },
+        {
+          identifier: 'complete',
+          buttonTitle: 'Mark as Done',
+          options: {
+            opensAppToForeground: false,
+          },
+        },
+      ]);
+      console.log('Notification categories set up');
+    } catch (error) {
+      console.error('Error setting up notification categories:', error);
     }
   }
 
@@ -162,6 +192,21 @@ class NotificationService {
           const { sound } = await Audio.Sound.createAsync(RINGTONE_FILES[data.ringTone], {
             shouldPlay: true,
           });
+
+          // Handle notification duration for foreground sound
+          const settings = await this.getNotificationSettings();
+          const durationSeconds = settings.notificationDuration || 30;
+
+          if (durationSeconds > 0) {
+            setTimeout(async () => {
+              try {
+                await sound.stopAsync();
+                await sound.unloadAsync();
+              } catch (e) {
+                // Ignore error if sound already unloaded
+              }
+            }, durationSeconds * 1000);
+          }
         } catch (audioError) {
           console.log('Error playing custom sound:', audioError);
         }
@@ -172,13 +217,48 @@ class NotificationService {
   }
 
   /**
-   * Handle notification response (user tapped notification)
+   * Handle notification response (user tapped notification or action)
    */
   static async handleNotificationResponse(response) {
     try {
       const notificationId = response.notification.request.content.data?.notificationId;
-      if (notificationId) {
-        await NotificationManager.updateNotificationStatus(notificationId, 'completed');
+      const actionIdentifier = response.actionIdentifier;
+
+      if (actionIdentifier === 'snooze') {
+        // Handle Snooze
+        console.log('Snoozing notification:', notificationId);
+        const settings = await this.getNotificationSettings();
+        const snoozeMinutes = settings.snoozeTime || 10;
+
+        // Reconstruct notification data
+        const content = response.notification.request.content;
+        const data = content.data;
+
+        const notificationData = {
+          id: data.notificationId,
+          reminderId: data.reminderId,
+          title: content.title,
+          description: content.body,
+          category: data.category,
+          ringTone: data.ringTone,
+          scheduledTime: new Date(Date.now() + snoozeMinutes * 60000), // Snooze time
+        };
+
+        // Schedule snoozed notification
+        await this.scheduleNotification(notificationData, notificationData.scheduledTime);
+
+        // Update status? Maybe keep as triggered or set to snoozed if we had that status
+      } else if (actionIdentifier === 'complete') {
+        // Handle Complete
+        console.log('Marking notification as complete:', notificationId);
+        if (notificationId) {
+          await NotificationManager.updateNotificationStatus(notificationId, 'completed');
+        }
+      } else {
+        // Default (tap on notification body)
+        if (notificationId) {
+          await NotificationManager.updateNotificationStatus(notificationId, 'completed');
+        }
       }
 
       // You can add navigation logic here based on the notification data
@@ -244,7 +324,13 @@ class NotificationService {
           : null,
         vibrate: settings.vibrationEnabled ? [0, 250, 250, 250] : [],
         priority: Notifications.AndroidNotificationPriority.HIGH,
+        categoryIdentifier: 'reminder', // Link to the category with Snooze/Complete actions
         ...(channelId && { channelId }),
+        // Android only: Cancel notification after duration
+        ...(Platform.OS === 'android' &&
+          settings.notificationDuration > 0 && {
+            timeoutAfter: settings.notificationDuration * 1000,
+          }),
       };
 
       // Use exact timestamp for more precise scheduling
@@ -420,6 +506,47 @@ class NotificationService {
     } catch (error) {
       console.error('Error getting scheduled notifications:', error);
       return [];
+    }
+  }
+
+  /**
+   * Reschedule all pending notifications
+   * Used when settings (sound, vibration) change
+   */
+  static async rescheduleAllNotifications() {
+    try {
+      console.log('Rescheduling all notifications to apply new settings...');
+
+      // 1. Cancel all system notifications
+      await Notifications.cancelAllScheduledNotificationsAsync();
+
+      // 2. Get all pending notifications from our local manager
+      const pendingNotifications = await NotificationManager.getPendingNotifications();
+
+      console.log(`Found ${pendingNotifications.length} pending notifications to reschedule`);
+
+      // 3. Reschedule each one
+      let count = 0;
+      const now = new Date();
+
+      for (const notification of pendingNotifications) {
+        const triggerTime = new Date(notification.scheduledTime);
+
+        // Only reschedule if time hasn't passed (or is very close)
+        // If it's in the past, it might have been missed or is about to fire
+        if (triggerTime > now) {
+          await this.scheduleNotification(notification, triggerTime);
+          count++;
+        } else {
+          console.log('Skipping past notification:', notification.id, triggerTime);
+        }
+      }
+
+      console.log(`Successfully rescheduled ${count} notifications`);
+      return true;
+    } catch (error) {
+      console.error('Error rescheduling notifications:', error);
+      return false;
     }
   }
 

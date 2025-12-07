@@ -71,6 +71,8 @@ const ReminderListScreen = ({ navigation, route }) => {
           console.error('Error parsing reminders JSON:', parseError);
           setReminders([]);
         }
+      } else {
+        setReminders([]);
       }
     } catch (error) {
       console.error('Error loading reminders from storage:', error);

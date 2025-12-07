@@ -246,7 +246,11 @@ const FilterModal = ({ visible, onClose, onApply, initialFilters, initialSort, i
                 Clear All
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleApply} activeOpacity={0.9}>
+            <TouchableOpacity
+              onPress={handleApply}
+              activeOpacity={0.9}
+              style={styles.applyButtonContainer}
+            >
               <LinearGradient colors={['#667EEA', '#764BA2']} style={styles.applyButton}>
                 <Text style={styles.applyButtonText}>Apply Filters</Text>
               </LinearGradient>
@@ -373,6 +377,9 @@ const styles = StyleSheet.create({
   },
   clearButtonTextDark: {
     color: '#9CA3AF',
+  },
+  applyButtonContainer: {
+    flex: 1,
   },
   applyButton: {
     flex: 1,

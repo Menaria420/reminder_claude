@@ -1411,281 +1411,294 @@ const CreateReminderScreen = ({ navigation, route }) => {
         {/* Custom Configuration */}
         {type === 'custom' && (
           <>
-            <View style={styles.customCard}>
-              <Text style={styles.customTitle}>Custom Schedule</Text>
+            <View style={[styles.customCard, isDarkMode && styles.configCardDark]}>
+              <Text style={[styles.customTitle, isDarkMode && styles.configTitleDark]}>
+                Custom Schedule
+              </Text>
 
               {/* Year Selection */}
-              <View style={styles.customRow}>
-                <Text style={styles.customLabel}>Year</Text>
-                <View style={styles.toggleGroup}>
-                  <TouchableOpacity
-                    style={[
-                      styles.toggleButton,
-                      reminderData.customSettings.yearRepeat === 'specific' && styles.toggleActive,
-                    ]}
-                    onPress={() => {
-                      handleVibrate();
-                      setReminderData({
-                        ...reminderData,
-                        customSettings: { ...reminderData.customSettings, yearRepeat: 'specific' },
-                      });
-                    }}
+              <View style={styles.customSection}>
+                <View style={styles.customSectionHeader}>
+                  <Text
+                    style={[styles.customSectionLabel, isDarkMode && styles.customSectionLabelDark]}
                   >
-                    <Text
-                      style={[
-                        styles.toggleText,
-                        reminderData.customSettings.yearRepeat === 'specific' &&
-                          styles.toggleTextActive,
-                      ]}
-                    >
-                      Specific
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.toggleButton,
-                      reminderData.customSettings.yearRepeat === 'every' && styles.toggleActive,
-                    ]}
-                    onPress={() => {
-                      handleVibrate();
-                      setReminderData({
-                        ...reminderData,
-                        customSettings: { ...reminderData.customSettings, yearRepeat: 'every' },
-                      });
-                    }}
+                    Year
+                  </Text>
+                  <View
+                    style={[styles.segmentContainer, isDarkMode && styles.segmentContainerDark]}
                   >
-                    <Text
-                      style={[
-                        styles.toggleText,
-                        reminderData.customSettings.yearRepeat === 'every' &&
-                          styles.toggleTextActive,
-                      ]}
-                    >
-                      Every Year
-                    </Text>
-                  </TouchableOpacity>
+                    {['Specific', 'Every Year'].map((option) => {
+                      const value = option === 'Specific' ? 'specific' : 'every';
+                      const isActive = reminderData.customSettings.yearRepeat === value;
+                      return (
+                        <TouchableOpacity
+                          key={option}
+                          style={[
+                            styles.segmentButton,
+                            isActive &&
+                              (isDarkMode
+                                ? styles.segmentButtonActiveDark
+                                : styles.segmentButtonActive),
+                          ]}
+                          onPress={() => {
+                            handleVibrate();
+                            setReminderData({
+                              ...reminderData,
+                              customSettings: { ...reminderData.customSettings, yearRepeat: value },
+                            });
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.segmentText,
+                              isDarkMode && styles.segmentTextDark,
+                              isActive && styles.segmentTextActive,
+                            ]}
+                          >
+                            {option}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
                 </View>
-              </View>
 
-              {reminderData.customSettings.yearRepeat === 'specific' && (
-                <TextInput
-                  style={styles.yearInput}
-                  value={String(reminderData.customSettings.year)}
-                  onChangeText={(text) => {
-                    const year = parseInt(text) || new Date().getFullYear();
-                    setReminderData({
-                      ...reminderData,
-                      customSettings: { ...reminderData.customSettings, year },
-                    });
-                  }}
-                  keyboardType="numeric"
-                  placeholder="2025"
-                  maxLength={4}
-                />
-              )}
+                {reminderData.customSettings.yearRepeat === 'specific' && (
+                  <TextInput
+                    style={[styles.input, isDarkMode && styles.inputDark, { marginTop: 8 }]}
+                    value={String(reminderData.customSettings.year)}
+                    onChangeText={(text) => {
+                      const year = parseInt(text) || new Date().getFullYear();
+                      setReminderData({
+                        ...reminderData,
+                        customSettings: { ...reminderData.customSettings, year },
+                      });
+                    }}
+                    keyboardType="numeric"
+                    placeholder="YYYY"
+                    placeholderTextColor={isDarkMode ? '#6B7280' : '#9CA3AF'}
+                    maxLength={4}
+                  />
+                )}
+              </View>
 
               {/* Month Selection */}
-              <View style={styles.customRow}>
-                <Text style={styles.customLabel}>Month</Text>
-                <View style={styles.toggleGroup}>
-                  <TouchableOpacity
-                    style={[
-                      styles.toggleButton,
-                      reminderData.customSettings.monthRepeat === 'specific' && styles.toggleActive,
-                    ]}
-                    onPress={() => {
-                      handleVibrate();
-                      setReminderData({
-                        ...reminderData,
-                        customSettings: { ...reminderData.customSettings, monthRepeat: 'specific' },
-                      });
-                    }}
+              <View style={styles.customSection}>
+                <View style={styles.customSectionHeader}>
+                  <Text
+                    style={[styles.customSectionLabel, isDarkMode && styles.customSectionLabelDark]}
                   >
-                    <Text
-                      style={[
-                        styles.toggleText,
-                        reminderData.customSettings.monthRepeat === 'specific' &&
-                          styles.toggleTextActive,
-                      ]}
-                    >
-                      Specific
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.toggleButton,
-                      reminderData.customSettings.monthRepeat === 'every' && styles.toggleActive,
-                    ]}
-                    onPress={() => {
-                      handleVibrate();
-                      setReminderData({
-                        ...reminderData,
-                        customSettings: { ...reminderData.customSettings, monthRepeat: 'every' },
-                      });
-                    }}
+                    Month
+                  </Text>
+                  <View
+                    style={[styles.segmentContainer, isDarkMode && styles.segmentContainerDark]}
                   >
-                    <Text
-                      style={[
-                        styles.toggleText,
-                        reminderData.customSettings.monthRepeat === 'every' &&
-                          styles.toggleTextActive,
-                      ]}
-                    >
-                      Every Month
-                    </Text>
-                  </TouchableOpacity>
+                    {['Specific', 'Every Month'].map((option) => {
+                      const value = option === 'Specific' ? 'specific' : 'every';
+                      const isActive = reminderData.customSettings.monthRepeat === value;
+                      return (
+                        <TouchableOpacity
+                          key={option}
+                          style={[
+                            styles.segmentButton,
+                            isActive &&
+                              (isDarkMode
+                                ? styles.segmentButtonActiveDark
+                                : styles.segmentButtonActive),
+                          ]}
+                          onPress={() => {
+                            handleVibrate();
+                            setReminderData({
+                              ...reminderData,
+                              customSettings: {
+                                ...reminderData.customSettings,
+                                monthRepeat: value,
+                              },
+                            });
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.segmentText,
+                              isDarkMode && styles.segmentTextDark,
+                              isActive && styles.segmentTextActive,
+                            ]}
+                          >
+                            {option}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
                 </View>
-              </View>
 
-              {reminderData.customSettings.monthRepeat === 'specific' && (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.chipScroll}
-                >
-                  {[
-                    'Jan',
-                    'Feb',
-                    'Mar',
-                    'Apr',
-                    'May',
-                    'Jun',
-                    'Jul',
-                    'Aug',
-                    'Sep',
-                    'Oct',
-                    'Nov',
-                    'Dec',
-                  ].map((month, index) => (
-                    <TouchableOpacity
-                      key={month}
-                      style={[
-                        styles.chip,
-                        reminderData.customSettings.month === index + 1 && styles.chipActive,
-                      ]}
-                      onPress={() => {
-                        handleVibrate();
-                        setReminderData({
-                          ...reminderData,
-                          customSettings: { ...reminderData.customSettings, month: index + 1 },
-                        });
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          reminderData.customSettings.month === index + 1 && styles.chipTextActive,
-                        ]}
-                      >
-                        {month}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              )}
+                {reminderData.customSettings.monthRepeat === 'specific' && (
+                  <View style={styles.monthGrid}>
+                    {[
+                      'Jan',
+                      'Feb',
+                      'Mar',
+                      'Apr',
+                      'May',
+                      'Jun',
+                      'Jul',
+                      'Aug',
+                      'Sep',
+                      'Oct',
+                      'Nov',
+                      'Dec',
+                    ].map((month, index) => {
+                      const isActive = reminderData.customSettings.month === index + 1;
+                      return (
+                        <TouchableOpacity
+                          key={month}
+                          style={[
+                            styles.monthButton,
+                            isDarkMode && styles.monthButtonDark,
+                            isActive &&
+                              (isDarkMode
+                                ? styles.monthButtonActiveDark
+                                : styles.monthButtonActive),
+                          ]}
+                          onPress={() => {
+                            handleVibrate();
+                            setReminderData({
+                              ...reminderData,
+                              customSettings: { ...reminderData.customSettings, month: index + 1 },
+                            });
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.monthButtonText,
+                              isDarkMode && styles.monthButtonTextDark,
+                              isActive && styles.monthButtonTextActive,
+                            ]}
+                          >
+                            {month}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
 
               {/* Date Selection */}
-              <View style={styles.customRow}>
-                <Text style={styles.customLabel}>Date</Text>
-                <View style={styles.toggleGroup}>
-                  <TouchableOpacity
-                    style={[
-                      styles.toggleButton,
-                      reminderData.customSettings.dateRepeat === 'specific' && styles.toggleActive,
-                    ]}
-                    onPress={() => {
-                      handleVibrate();
-                      setReminderData({
-                        ...reminderData,
-                        customSettings: { ...reminderData.customSettings, dateRepeat: 'specific' },
-                      });
-                    }}
+              <View style={styles.customSection}>
+                <View style={styles.customSectionHeader}>
+                  <Text
+                    style={[styles.customSectionLabel, isDarkMode && styles.customSectionLabelDark]}
                   >
-                    <Text
-                      style={[
-                        styles.toggleText,
-                        reminderData.customSettings.dateRepeat === 'specific' &&
-                          styles.toggleTextActive,
-                      ]}
-                    >
-                      Specific
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.toggleButton,
-                      reminderData.customSettings.dateRepeat === 'every' && styles.toggleActive,
-                    ]}
-                    onPress={() => {
-                      handleVibrate();
-                      setReminderData({
-                        ...reminderData,
-                        customSettings: { ...reminderData.customSettings, dateRepeat: 'every' },
-                      });
-                    }}
+                    Date
+                  </Text>
+                  <View
+                    style={[styles.segmentContainer, isDarkMode && styles.segmentContainerDark]}
                   >
-                    <Text
-                      style={[
-                        styles.toggleText,
-                        reminderData.customSettings.dateRepeat === 'every' &&
-                          styles.toggleTextActive,
-                      ]}
-                    >
-                      Every Day
-                    </Text>
-                  </TouchableOpacity>
+                    {['Specific', 'Every Day'].map((option) => {
+                      const value = option === 'Specific' ? 'specific' : 'every';
+                      const isActive = reminderData.customSettings.dateRepeat === value;
+                      return (
+                        <TouchableOpacity
+                          key={option}
+                          style={[
+                            styles.segmentButton,
+                            isActive &&
+                              (isDarkMode
+                                ? styles.segmentButtonActiveDark
+                                : styles.segmentButtonActive),
+                          ]}
+                          onPress={() => {
+                            handleVibrate();
+                            setReminderData({
+                              ...reminderData,
+                              customSettings: { ...reminderData.customSettings, dateRepeat: value },
+                            });
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.segmentText,
+                              isDarkMode && styles.segmentTextDark,
+                              isActive && styles.segmentTextActive,
+                            ]}
+                          >
+                            {option}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
                 </View>
+
+                {reminderData.customSettings.dateRepeat === 'specific' && (
+                  <View style={styles.monthGrid}>
+                    {[...Array(31)].map((_, i) => {
+                      const date = i + 1;
+                      const isActive = reminderData.customSettings.date === date;
+                      return (
+                        <TouchableOpacity
+                          key={date}
+                          style={[
+                            styles.dateButton, // Reusing dateButton style from Monthly view
+                            { width: '12.28%', margin: '1%' }, // Override width for 7 columns
+                            isDarkMode && styles.dateButtonDark, // Need to ensure this style exists or use generic
+                            isActive && styles.customDateButtonActive,
+                          ]}
+                          onPress={() => {
+                            handleVibrate();
+                            setReminderData({
+                              ...reminderData,
+                              customSettings: { ...reminderData.customSettings, date: date },
+                            });
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.dateButtonText,
+                              isActive && styles.customDateButtonTextActive,
+                            ]}
+                          >
+                            {date}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
               </View>
 
-              {reminderData.customSettings.dateRepeat === 'specific' && (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.chipScroll}
-                >
-                  {[...Array(31)].map((_, i) => (
-                    <TouchableOpacity
-                      key={i + 1}
-                      style={[
-                        styles.chip,
-                        reminderData.customSettings.date === i + 1 && styles.chipActive,
-                      ]}
-                      onPress={() => {
-                        handleVibrate();
-                        setReminderData({
-                          ...reminderData,
-                          customSettings: { ...reminderData.customSettings, date: i + 1 },
-                        });
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          reminderData.customSettings.date === i + 1 && styles.chipTextActive,
-                        ]}
-                      >
-                        {i + 1}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              )}
-
               {/* Time Selection */}
-              <View style={styles.customRow}>
-                <Text style={styles.customLabel}>Time</Text>
+              <View style={[styles.customSection, { marginBottom: 0 }]}>
+                <Text
+                  style={[
+                    styles.customSectionLabel,
+                    isDarkMode && styles.customSectionLabelDark,
+                    { marginBottom: 12 },
+                  ]}
+                >
+                  Time
+                </Text>
                 <TouchableOpacity
-                  style={styles.timePickerButton}
+                  style={[styles.largeTimeButton, isDarkMode && styles.largeTimeButtonDark]}
                   onPress={() => setShowTimePicker(true)}
                 >
-                  <Icon name="access-time" size={20} color="#667EEA" />
-                  <Text style={styles.timePickerText}>
+                  <Text style={styles.largeTimeText}>
                     {reminderData.customSettings.time
                       ? new Date(reminderData.customSettings.time).toLocaleTimeString([], {
                           hour: '2-digit',
                           minute: '2-digit',
                         })
                       : 'Select Time'}
+                  </Text>
+                  <Text
+                    style={{
+                      color: isDarkMode ? '#9CA3AF' : '#6B7280',
+                      marginTop: 4,
+                      fontSize: 12,
+                    }}
+                  >
+                    Tap to change
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -2744,7 +2757,7 @@ const styles = StyleSheet.create({
   customCard: {
     backgroundColor: '#FEF2F2',
     borderRadius: 16,
-    padding: 20,
+    padding: 16, // Reduced from 20
     marginBottom: 20,
   },
   customTitle: {
@@ -2797,17 +2810,139 @@ const styles = StyleSheet.create({
     maxHeight: 50,
   },
   chip: {
-    backgroundColor: 'white',
-    borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 20,
     marginRight: 8,
+  },
+  chipActive: {
+    backgroundColor: '#667EEA',
+  },
+  chipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  chipTextActive: {
+    color: 'white',
+  },
+  // New Custom UI Styles
+  customSection: {
+    marginBottom: 16, // Reduced from 24
+  },
+  customSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  customSectionLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  customSectionLabelDark: {
+    color: '#E5E7EB',
+  },
+  segmentContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    padding: 2,
+  },
+  segmentContainerDark: {
+    backgroundColor: '#1a1a1a',
+  },
+  segmentButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  segmentButtonActive: {
+    backgroundColor: '#667EEA',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 1,
+  },
+  segmentButtonActiveDark: {
+    backgroundColor: '#3a4560',
+  },
+  segmentText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  segmentTextActive: {
+    color: 'white',
+  },
+  segmentTextDark: {
+    color: '#9CA3AF',
+  },
+  monthGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -4,
+  },
+  monthButton: {
+    width: '31.33%',
+    margin: '1%',
+    paddingVertical: 10,
+    backgroundColor: 'white',
+    borderRadius: 10,
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    minWidth: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
+  monthButtonDark: {
+    backgroundColor: '#2a2a2a',
+    borderColor: '#3a4560',
+  },
+  monthButtonActive: {
+    backgroundColor: '#667EEA',
+    borderColor: '#667EEA',
+  },
+  monthButtonActiveDark: {
+    backgroundColor: '#3a4560',
+    borderColor: '#667EEA',
+  },
+  monthButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  monthButtonTextDark: {
+    color: '#9CA3AF',
+  },
+  monthButtonTextActive: {
+    color: 'white',
+  },
+  largeTimeButton: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  largeTimeButtonDark: {
+    backgroundColor: '#2a2a2a',
+    borderColor: '#3a4560',
+  },
+  largeTimeText: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#667EEA',
+  },
+  customDateButtonActive: {
+    backgroundColor: '#667EEA',
+  },
+  customDateButtonTextActive: {
+    color: 'white',
+  },
+
   chipActive: {
     backgroundColor: '#EF4444',
     borderColor: '#EF4444',
