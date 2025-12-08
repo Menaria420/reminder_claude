@@ -53,8 +53,6 @@ const ForgotPasswordScreen = ({ navigation }) => {
       // Create the deep link
       const resetLink = Linking.createURL(`reset-password/${token}/${email}`);
 
-      console.log('Reset Link:', resetLink);
-
       // Simulate sending email
       setTimeout(() => {
         Alert.alert(

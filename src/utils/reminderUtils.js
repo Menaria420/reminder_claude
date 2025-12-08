@@ -145,22 +145,12 @@ export const getReminderDisplayTime = (reminder) => {
 // Get formatted next trigger date like "2 Sat, Nov 29, 2025 at 9:00 AM"
 export const getFormattedNextTrigger = (reminder) => {
   try {
-    console.log('🔍 getFormattedNextTrigger called with:', {
-      hasReminder: !!reminder,
-      type: reminder?.type,
-      title: reminder?.title,
-      category: reminder?.category,
-    });
-
     if (!reminder) {
-      console.log('❌ No reminder provided, returning "Not set"');
       return 'Not set';
     }
 
     const now = new Date();
     let nextTrigger = null;
-
-    console.log(`📅 Processing ${reminder.type} reminder...`);
 
     if (reminder.type === 'hourly') {
       // Convert string to Date if needed
@@ -168,13 +158,6 @@ export const getFormattedNextTrigger = (reminder) => {
         reminder.hourlyStartTime instanceof Date
           ? reminder.hourlyStartTime
           : new Date(reminder.hourlyStartTime);
-
-      console.log('🕐 Hourly Reminder Debug:');
-      console.log('  - Raw hourlyStartTime:', reminder.hourlyStartTime);
-      console.log('  - Parsed startTime:', startTime);
-      console.log('  - startTime ISO:', startTime.toISOString());
-      console.log('  - getHours():', startTime.getHours());
-      console.log('  - getMinutes():', startTime.getMinutes());
 
       if (isNaN(startTime.getTime())) {
         return 'Invalid time';
@@ -187,58 +170,33 @@ export const getFormattedNextTrigger = (reminder) => {
 
       const interval = reminder.hourlyInterval || 1;
 
-      console.log('  - Next trigger (before loop):', nextTrigger);
-      console.log('  - Current time:', now);
-      console.log('  - Is in past?:', nextTrigger < now);
-
       // Find next occurrence
       while (nextTrigger < now) {
         nextTrigger.setHours(nextTrigger.getHours() + interval);
       }
-
-      console.log('  - Next trigger (after loop):', nextTrigger);
-      console.log('  - Next trigger ISO:', nextTrigger.toISOString());
-      console.log('  - Next getHours():', nextTrigger.getHours());
-      console.log('  - Next getMinutes():', nextTrigger.getMinutes());
     } else if (reminder.type === 'weekly') {
-      console.log('  - Weekly Days:', reminder.weeklyDays);
-      console.log('  - Weekly Times:', reminder.weeklyTimes);
-
-      if (!reminder.weeklyDays || reminder.weeklyDays.length === 0) {
-        console.log('  ⚠️ No weekly days set');
-        return 'No days selected';
-      }
-
       // Find the next occurrence
       const dayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
 
       for (const day of reminder.weeklyDays) {
         const times = reminder.weeklyTimes[day] || [];
-        console.log(`  - Day ${day}: ${times.length} times`);
 
         if (times.length === 0) {
-          console.log(`  ⚠️ No times set for ${day}`);
           continue;
         }
 
         for (const timeStr of times) {
           try {
-            console.log(`    - Parsing time: "${timeStr}"`);
-
             // Parse time string like "9:00 AM"
             const trimmed = timeStr.trim();
             // Use regex to split on any whitespace (handles non-breaking spaces)
             const parts = trimmed.split(/\s+/);
 
-            console.log(`    - Parts:`, parts, `(length: ${parts.length})`);
-
             if (parts.length !== 2) {
-              console.log(`    ❌ Invalid parts length: ${parts.length}`);
               // Try alternative parsing: look for AM/PM at the end
               const ampmMatch = trimmed.match(/^(.+?)\s*(AM|PM)$/i);
               if (ampmMatch) {
                 const [, timePart, period] = ampmMatch;
-                console.log(`    - Alternative parse: time="${timePart}", period="${period}"`);
                 parts[0] = timePart.trim();
                 parts[1] = period.toUpperCase();
               } else {
@@ -249,21 +207,14 @@ export const getFormattedNextTrigger = (reminder) => {
             const [time, period] = parts;
             const [hoursStr, minutesStr] = time.split(':');
 
-            console.log(`    - Time: "${time}", Period: "${period}"`);
-            console.log(`    - Hours: "${hoursStr}", Minutes: "${minutesStr}"`);
-
             if (!hoursStr || !minutesStr) {
-              console.log(`    ❌ Missing hours or minutes`);
               continue;
             }
 
             let hours = parseInt(hoursStr, 10);
             const minutes = parseInt(minutesStr, 10);
 
-            console.log(`    - Parsed: hours=${hours}, minutes=${minutes}`);
-
             if (isNaN(hours) || isNaN(minutes)) {
-              console.log(`    ❌ NaN values`);
               continue;
             }
 
@@ -271,11 +222,8 @@ export const getFormattedNextTrigger = (reminder) => {
             if (period === 'PM' && hours !== 12) hours += 12;
             if (period === 'AM' && hours === 12) hours = 0;
 
-            console.log(`    - 24-hour format: ${hours}:${minutes}`);
-
             const dayIndex = dayMap[day];
             if (dayIndex === undefined) {
-              console.log(`    ❌ Invalid day: ${day}`);
               continue;
             }
 
@@ -287,20 +235,13 @@ export const getFormattedNextTrigger = (reminder) => {
             potentialDate.setDate(now.getDate() + daysUntil);
             potentialDate.setHours(hours, minutes, 0, 0);
 
-            console.log(`    - Potential date: ${potentialDate.toISOString()}`);
-            console.log(
-              `    - Days until: ${daysUntil}, Current day: ${currentDayIndex}, Target day: ${dayIndex}`
-            );
-
             // If it's today but time has passed, move to next week
             if (daysUntil === 0 && potentialDate < now) {
               potentialDate.setDate(potentialDate.getDate() + 7);
-              console.log(`    - Moved to next week: ${potentialDate.toISOString()}`);
             }
 
             if (!nextTrigger || potentialDate < nextTrigger) {
               nextTrigger = potentialDate;
-              console.log(`    ✅ Set as next trigger!`);
             }
           } catch (err) {
             console.error('Error parsing weekly time:', timeStr, err);
@@ -310,7 +251,6 @@ export const getFormattedNextTrigger = (reminder) => {
       }
 
       if (!nextTrigger) {
-        console.log('  ⚠️ No valid times found for weekly reminder');
         return 'No times set';
       }
     } else if (reminder.type === '15days') {
@@ -451,12 +391,6 @@ export const getFormattedNextTrigger = (reminder) => {
       return `${date} ${dayName}, ${monthName} ${year} at ${time}`;
     }
 
-    console.log('⚠️ nextTrigger is null or invalid:', {
-      nextTrigger,
-      isNull: nextTrigger === null,
-      isNaN: nextTrigger ? isNaN(nextTrigger.getTime()) : 'N/A',
-      type: reminder.type,
-    });
     return 'Not set';
   } catch (error) {
     console.error('Error formatting next trigger:', error);

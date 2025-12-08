@@ -25,7 +25,6 @@ const RingtoneSelector = ({ visible, onClose, selectedRingtone, onSelect }) => {
     // Configure audio mode
     const configureAudio = async () => {
       try {
-        console.log('🔧 Configuring audio mode...');
         await Audio.setAudioModeAsync({
           playsInSilentModeIOS: true,
           staysActiveInBackground: false,
@@ -35,7 +34,6 @@ const RingtoneSelector = ({ visible, onClose, selectedRingtone, onSelect }) => {
           interruptionModeIOS: 1, // DoNotMix
           interruptionModeAndroid: 1, // DoNotMix
         });
-        console.log('✅ Audio mode configured successfully');
       } catch (error) {
         console.error('❌ Error configuring audio:', error);
       }
@@ -53,7 +51,6 @@ const RingtoneSelector = ({ visible, onClose, selectedRingtone, onSelect }) => {
   // Cleanup sound when modal closes
   useEffect(() => {
     if (!visible && soundRef.current) {
-      console.log('🚪 Modal closed, cleaning up sound');
       soundRef.current.unloadAsync();
       soundRef.current = null;
       setCurrentlyPlaying(null);
@@ -66,12 +63,10 @@ const RingtoneSelector = ({ visible, onClose, selectedRingtone, onSelect }) => {
 
   const playRingtone = async (ringtoneId) => {
     try {
-      console.log('🔊 Attempting to play ringtone:', ringtoneId);
       handleVibrate();
 
       // Stop any currently playing sound
       if (soundRef.current) {
-        console.log('⏹️ Stopping currently playing sound');
         await soundRef.current.unloadAsync();
         soundRef.current = null;
       }
@@ -80,31 +75,19 @@ const RingtoneSelector = ({ visible, onClose, selectedRingtone, onSelect }) => {
 
       // Play the specific audio file for this ringtone
       const source = RINGTONE_FILES[ringtoneId] || RINGTONE_FILES.default;
-      console.log('📁 Loading sound source for:', ringtoneId, source);
 
       const { sound } = await Audio.Sound.createAsync(
         source,
         { shouldPlay: true, volume: 1.0 } // Auto-play with full volume
       );
 
-      console.log('✅ Sound created successfully');
       soundRef.current = sound;
 
       // Set up completion listener
       sound.setOnPlaybackStatusUpdate(async (status) => {
         if (status.didJustFinish) {
-          console.log('🏁 Sound finished playing');
           setCurrentlyPlaying(null);
         }
-      });
-
-      // Get and log playback status
-      const status = await sound.getStatusAsync();
-      console.log('🎵 Playback status:', {
-        isLoaded: status.isLoaded,
-        isPlaying: status.isPlaying,
-        durationMillis: status.durationMillis,
-        positionMillis: status.positionMillis,
       });
     } catch (error) {
       console.error('❌ Error playing ringtone preview:', error);

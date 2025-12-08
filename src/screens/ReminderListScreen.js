@@ -245,35 +245,60 @@ const ReminderListScreen = ({ navigation, route }) => {
         </View>
 
         {/* Action Buttons */}
-        <View style={styles.cardActions}>
+        <View style={[styles.cardActions, isDarkMode && styles.cardActionsDark]}>
           <TouchableOpacity
-            style={[styles.actionBtn, styles.editBtn]}
+            style={[styles.actionBtn, styles.editBtn, isDarkMode && styles.editBtnDark]}
             onPress={() =>
               navigation.navigate('CreateReminder', { editMode: true, reminder: item })
             }
           >
-            <Icon name="edit" size={18} color="#3B82F6" />
-            <Text style={[styles.actionBtnText, { color: '#3B82F6' }]}>Edit</Text>
+            <Icon name="edit" size={18} color={isDarkMode ? '#60A5FA' : '#3B82F6'} />
+            <Text style={[styles.actionBtnText, { color: isDarkMode ? '#60A5FA' : '#3B82F6' }]}>
+              Edit
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.actionBtn, styles.toggleBtn]}
+            style={[styles.actionBtn, styles.toggleBtn, isDarkMode && styles.toggleBtnDark]}
             onPress={() => toggleReminder(item.id)}
           >
             <Icon
               name={item.isActive ? 'pause' : 'play-arrow'}
               size={18}
-              color={item.isActive ? '#F59E0B' : '#10B981'}
+              color={
+                item.isActive
+                  ? isDarkMode
+                    ? '#FBBF24'
+                    : '#F59E0B'
+                  : isDarkMode
+                  ? '#34D399'
+                  : '#10B981'
+              }
             />
-            <Text style={[styles.actionBtnText, { color: item.isActive ? '#F59E0B' : '#10B981' }]}>
+            <Text
+              style={[
+                styles.actionBtnText,
+                {
+                  color: item.isActive
+                    ? isDarkMode
+                      ? '#FBBF24'
+                      : '#F59E0B'
+                    : isDarkMode
+                    ? '#34D399'
+                    : '#10B981',
+                },
+              ]}
+            >
               {item.isActive ? 'Pause' : 'Resume'}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.actionBtn, styles.deleteBtn]}
+            style={[styles.actionBtn, styles.deleteBtn, isDarkMode && styles.deleteBtnDark]}
             onPress={() => deleteReminder(item.id)}
           >
-            <Icon name="delete-outline" size={18} color="#EF4444" />
-            <Text style={[styles.actionBtnText, { color: '#EF4444' }]}>Delete</Text>
+            <Icon name="delete-outline" size={18} color={isDarkMode ? '#F87171' : '#EF4444'} />
+            <Text style={[styles.actionBtnText, { color: isDarkMode ? '#F87171' : '#EF4444' }]}>
+              Delete
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -731,6 +756,9 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
   },
+  cardActionsDark: {
+    borderTopColor: '#3a4560',
+  },
   actionBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -745,13 +773,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   editBtn: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#DBEAFE',
+  },
+  editBtnDark: {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
   },
   toggleBtn: {
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#DCFCE7',
+  },
+  toggleBtnDark: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
   },
   deleteBtn: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: '#FEE2E2',
+  },
+  deleteBtnDark: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
   },
   emptyState: {
     alignItems: 'center',

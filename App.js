@@ -149,7 +149,6 @@ export default function App() {
     const initializeNotifications = async () => {
       try {
         await NotificationService.initialize();
-        console.log('Notification service initialized successfully');
       } catch (error) {
         console.error('Error initializing notifications:', error);
       }

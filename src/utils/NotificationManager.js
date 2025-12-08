@@ -50,7 +50,6 @@ class NotificationManager {
       // Save to storage
       await AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications));
 
-      console.log('Notification created:', notification.id);
       return notification;
     } catch (error) {
       console.error('Error creating notification:', error);
@@ -151,7 +150,6 @@ class NotificationManager {
         notifications[index].status = status;
         notifications[index].updatedAt = new Date().toISOString();
         await AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications));
-        console.log(`Notification ${id} status updated to ${status}`);
         return true;
       }
       return false;
@@ -169,7 +167,6 @@ class NotificationManager {
       const notifications = await this.getAllNotifications();
       const filtered = notifications.filter((n) => n.id !== id);
       await AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(filtered));
-      console.log(`Notification ${id} deleted`);
       return true;
     } catch (error) {
       console.error('Error deleting notification:', error);
@@ -185,7 +182,6 @@ class NotificationManager {
       const notifications = await this.getAllNotifications();
       const filtered = notifications.filter((n) => n.reminderId !== reminderId);
       await AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(filtered));
-      console.log(`Notifications for reminder ${reminderId} deleted`);
       return true;
     } catch (error) {
       console.error('Error deleting notifications by reminder ID:', error);
@@ -211,7 +207,6 @@ class NotificationManager {
       const deletedCount = notifications.length - filtered.length;
       if (deletedCount > 0) {
         await AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(filtered));
-        console.log(`Cleaned up ${deletedCount} old notifications`);
       }
 
       return deletedCount;
@@ -240,7 +235,6 @@ class NotificationManager {
   static async clearAllNotifications() {
     try {
       await AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify([]));
-      console.log('All notifications cleared');
       return true;
     } catch (error) {
       console.error('Error clearing notifications:', error);

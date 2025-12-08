@@ -45,75 +45,77 @@ const CreateReminderScreen = ({ navigation, route }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
-  const [reminderData, setReminderData] = useState(
-    editMode && existingReminder
-      ? {
-          ...existingReminder,
-          // Ensure dates are Date objects
-          hourlyStartTime: existingReminder.hourlyStartTime
-            ? new Date(existingReminder.hourlyStartTime)
-            : new Date(),
-          fifteenDaysStart: existingReminder.fifteenDaysStart
-            ? new Date(existingReminder.fifteenDaysStart)
-            : new Date(),
-          fifteenDaysTime: existingReminder.fifteenDaysTime
-            ? new Date(existingReminder.fifteenDaysTime)
-            : new Date(),
-          monthlyTime: existingReminder.monthlyTime
-            ? new Date(existingReminder.monthlyTime)
-            : new Date(),
-          customSettings: existingReminder.customSettings
-            ? {
-                ...existingReminder.customSettings,
-                time: new Date(existingReminder.customSettings.time),
-              }
-            : {
-                yearRepeat: 'specific',
-                year: new Date().getFullYear(),
-                monthRepeat: 'specific',
-                month: new Date().getMonth() + 1,
-                dateRepeat: 'specific',
-                date: new Date().getDate(),
-                time: new Date(),
-              },
-        }
-      : {
-          category: '',
-          categoryTag: '', // Step 4 category (Personal, Work, Health, Family)
-          title: '',
-          description: '',
-          medicineName: '',
-          dosage: '',
-          exerciseName: '',
-          duration: '',
-          habitName: '',
-          goal: '',
-          type: '',
-          hourlyInterval: 1,
-          hourlyStartTime: new Date(),
-          weeklyDays: [],
-          weeklyTimes: {}, // Changed to object for per-day times: { 'Mon': ['9:00 AM'], ... }
-          timeMethod: 'specific',
-          fifteenDaysStart: new Date(),
-          fifteenDaysTime: new Date(),
-          monthlyDate: 1,
-          monthlyTime: new Date(),
-          dateRepeat: 'specific',
-          notificationSound: 'default',
-          ringTone: 'default',
-          priority: 'normal',
-          customSettings: {
-            yearRepeat: 'specific',
-            year: new Date().getFullYear(),
-            monthRepeat: 'specific',
-            month: new Date().getMonth() + 1,
-            dateRepeat: 'specific',
-            date: new Date().getDate(),
-            time: new Date(),
-          },
-          goal: '',
-        }
-  );
+  const getInitialState = () => {
+    if (editMode && existingReminder) {
+      return {
+        ...existingReminder,
+        // Ensure dates are Date objects
+        hourlyStartTime: existingReminder.hourlyStartTime
+          ? new Date(existingReminder.hourlyStartTime)
+          : new Date(),
+        fifteenDaysStart: existingReminder.fifteenDaysStart
+          ? new Date(existingReminder.fifteenDaysStart)
+          : new Date(),
+        fifteenDaysTime: existingReminder.fifteenDaysTime
+          ? new Date(existingReminder.fifteenDaysTime)
+          : new Date(),
+        monthlyTime: existingReminder.monthlyTime
+          ? new Date(existingReminder.monthlyTime)
+          : new Date(),
+        customSettings: existingReminder.customSettings
+          ? {
+              ...existingReminder.customSettings,
+              time: new Date(existingReminder.customSettings.time),
+            }
+          : {
+              yearRepeat: 'specific',
+              year: new Date().getFullYear(),
+              monthRepeat: 'specific',
+              month: new Date().getMonth() + 1,
+              dateRepeat: 'specific',
+              date: new Date().getDate(),
+              time: new Date(),
+            },
+      };
+    }
+    return {
+      category: '',
+      categoryTag: '', // Step 4 category (Personal, Work, Health, Family)
+      title: '',
+      description: '',
+      medicineName: '',
+      dosage: '',
+      exerciseName: '',
+      duration: '',
+      habitName: '',
+      goal: '',
+      type: '',
+      hourlyInterval: 1,
+      hourlyStartTime: new Date(),
+      weeklyDays: [],
+      weeklyTimes: {}, // Changed to object for per-day times: { 'Mon': ['9:00 AM'], ... }
+      timeMethod: 'specific',
+      fifteenDaysStart: new Date(),
+      fifteenDaysTime: new Date(),
+      monthlyDate: 1,
+      monthlyTime: new Date(),
+      dateRepeat: 'specific',
+      notificationSound: 'default',
+      ringTone: 'default',
+      priority: 'normal',
+      customSettings: {
+        yearRepeat: 'specific',
+        year: new Date().getFullYear(),
+        monthRepeat: 'specific',
+        month: new Date().getMonth() + 1,
+        dateRepeat: 'specific',
+        date: new Date().getDate(),
+        time: new Date(),
+      },
+    };
+  };
+
+  const [reminderData, setReminderData] = useState(getInitialState);
 
   const reminderTypes = [
     {
@@ -196,10 +198,15 @@ const CreateReminderScreen = ({ navigation, route }) => {
 
       if (reminderData.type === 'hourly') {
         const startTime = new Date(reminderData.hourlyStartTime);
-        while (startTime < now) {
-          startTime.setHours(startTime.getHours() + (reminderData.hourlyInterval || 1));
+        let next = new Date(startTime);
+        // Fast forward if in past
+        if (next < now) {
+          const intervalMs = (reminderData.hourlyInterval || 1) * 60 * 60 * 1000;
+          const diff = now.getTime() - next.getTime();
+          const periods = Math.floor(diff / intervalMs) + 1;
+          next = new Date(next.getTime() + periods * intervalMs);
         }
-        return startTime.toLocaleString([], {
+        return next.toLocaleString([], {
           month: 'short',
           day: 'numeric',
           hour: '2-digit',
@@ -208,18 +215,60 @@ const CreateReminderScreen = ({ navigation, route }) => {
       }
 
       if (reminderData.type === 'weekly' && reminderData.weeklyDays.length > 0) {
-        // Find next occurrence
-        // This is complex with per-day times, for now just show first available
-        const day = reminderData.weeklyDays[0];
-        const times = reminderData.weeklyTimes[day];
-        if (times && times.length > 0) {
-          return `${day} at ${times[0]}`;
+        const dayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+        let candidates = [];
+
+        reminderData.weeklyDays.forEach((day) => {
+          const times = reminderData.weeklyTimes[day] || [];
+          times.forEach((timeStr) => {
+            const [hStr, mPart] = timeStr.split(':');
+            const [mStr, period] = mPart.split(' ');
+            let h = parseInt(hStr);
+            if (period === 'PM' && h !== 12) h += 12;
+            if (period === 'AM' && h === 12) h = 0;
+            const m = parseInt(mStr);
+
+            const targetDay = dayMap[day];
+            let date = new Date(now);
+            let diff = targetDay - date.getDay();
+
+            // Calculate date for this candidate
+            // If strictly in allowed future (or later today)
+            if (diff < 0) diff += 7;
+
+            // Same day check
+            if (diff === 0) {
+              if (date.getHours() > h || (date.getHours() === h && date.getMinutes() >= m)) {
+                diff = 7; // Move to next week
+              }
+            }
+
+            date.setDate(date.getDate() + diff);
+            date.setHours(h, m, 0, 0);
+            candidates.push(date);
+          });
+        });
+
+        if (candidates.length > 0) {
+          candidates.sort((a, b) => a - b);
+          return candidates[0].toLocaleString([], {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          });
         }
         return 'Weekly';
       }
 
       if (reminderData.type === '15days') {
-        return reminderData.fifteenDaysStart.toLocaleString([], {
+        let start = new Date(reminderData.fifteenDaysStart || new Date());
+        const intervalMs = 15 * 24 * 60 * 60 * 1000;
+        while (start < now) {
+          start = new Date(start.getTime() + intervalMs);
+        }
+        return start.toLocaleString([], {
           month: 'short',
           day: 'numeric',
           hour: '2-digit',
@@ -228,7 +277,9 @@ const CreateReminderScreen = ({ navigation, route }) => {
       }
 
       if (reminderData.type === 'monthly') {
-        return `${reminderData.monthlyDate}${getDaySuffix(reminderData.monthlyDate)} of each month`;
+        const date = reminderData.monthlyDate;
+        if (date === 'last') return 'End of each month';
+        return `${date}${getDaySuffix(date)} of each month`;
       }
 
       if (reminderData.type === 'custom') {
@@ -246,28 +297,11 @@ const CreateReminderScreen = ({ navigation, route }) => {
       }
 
       return 'Soon';
-    } catch (error) {
+    } catch (e) {
+      console.error(e);
       return 'Soon';
     }
   };
-
-  // Debug: Log reminder data in edit mode
-  useEffect(() => {
-    if (editMode && existingReminder) {
-      console.log('📝 EDIT MODE - Loaded Reminder Data:');
-      console.log('  - Category:', reminderData.category);
-      console.log('  - Type:', reminderData.type);
-      console.log('  - Title:', reminderData.title);
-      console.log('  - Medicine Name:', reminderData.medicineName);
-      console.log('  - Exercise Name:', reminderData.exerciseName);
-      console.log('  - Habit Name:', reminderData.habitName);
-      console.log('  - Priority:', reminderData.priority);
-      console.log('  - Ring Tone:', reminderData.ringTone);
-      console.log('  - Weekly Days:', reminderData.weeklyDays);
-      console.log('  - Hourly Interval:', reminderData.hourlyInterval);
-      console.log('  - Monthly Date:', reminderData.monthlyDate);
-    }
-  }, [editMode]);
 
   const getDaySuffix = (day) => {
     if (day > 3 && day < 21) return 'th';
@@ -509,32 +543,6 @@ const CreateReminderScreen = ({ navigation, route }) => {
         updatedReminders = [...reminders, updatedReminder];
       }
 
-      console.log('💾 Saving Reminder:');
-      console.log('  - Type:', updatedReminder.type);
-      console.log('  - Category:', updatedReminder.category);
-      console.log('  - Title:', updatedReminder.title);
-
-      if (updatedReminder.type === 'hourly') {
-        console.log('  - hourlyStartTime:', updatedReminder.hourlyStartTime);
-        console.log('  - hourlyInterval:', updatedReminder.hourlyInterval);
-        if (updatedReminder.hourlyStartTime) {
-          const time = new Date(updatedReminder.hourlyStartTime);
-          console.log('  - Parsed hours:', time.getHours());
-          console.log('  - Parsed minutes:', time.getMinutes());
-        }
-      } else if (updatedReminder.type === 'weekly') {
-        console.log('  - weeklyDays:', updatedReminder.weeklyDays);
-        console.log('  - weeklyTimes:', updatedReminder.weeklyTimes);
-        console.log('  - weeklyDays length:', updatedReminder.weeklyDays?.length);
-        console.log('  - weeklyTimes keys:', Object.keys(updatedReminder.weeklyTimes || {}));
-      } else if (updatedReminder.type === '15days') {
-        console.log('  - fifteenDaysStart:', updatedReminder.fifteenDaysStart);
-        console.log('  - fifteenDaysTime:', updatedReminder.fifteenDaysTime);
-      } else if (updatedReminder.type === 'monthly') {
-        console.log('  - monthlyDate:', updatedReminder.monthlyDate);
-        console.log('  - monthlyTime:', updatedReminder.monthlyTime);
-      }
-
       // Save to AsyncStorage
       await AsyncStorage.setItem('reminders', JSON.stringify(updatedReminders));
 
@@ -637,28 +645,14 @@ const CreateReminderScreen = ({ navigation, route }) => {
             triggerTime.setHours(9, 0, 0, 0);
           }
         } else if (reminderData.type === '15days') {
-          console.log('📅 15-Day Reminder Trigger Calculation:');
-          console.log('  - fifteenDaysTime:', reminderData.fifteenDaysTime);
-          console.log('  - fifteenDaysStart:', reminderData.fifteenDaysStart);
-
           triggerTime = new Date(reminderData.fifteenDaysTime);
-          console.log('  - Initial trigger from time:', triggerTime.toISOString());
-          console.log('  - Hours:', triggerTime.getHours());
-          console.log('  - Minutes:', triggerTime.getMinutes());
-          console.log('  - Seconds:', triggerTime.getSeconds());
-          console.log('  - Milliseconds:', triggerTime.getMilliseconds());
 
           // Set date to start date
           const startDate = new Date(reminderData.fifteenDaysStart);
           if (!isNaN(startDate.getTime())) {
-            console.log('  - Start date:', startDate.toISOString());
             triggerTime.setFullYear(startDate.getFullYear());
             triggerTime.setMonth(startDate.getMonth());
             triggerTime.setDate(startDate.getDate());
-            console.log('  - Final trigger time:', triggerTime.toISOString());
-            console.log('  - Final Hours:', triggerTime.getHours());
-            console.log('  - Final Minutes:', triggerTime.getMinutes());
-            console.log('  - Final Seconds:', triggerTime.getSeconds());
           }
         } else if (reminderData.type === 'monthly') {
           triggerTime = new Date(reminderData.monthlyTime);
@@ -718,19 +712,15 @@ const CreateReminderScreen = ({ navigation, route }) => {
 
         // Ensure trigger time is in the future
         if (triggerTime < new Date()) {
-          console.log('Trigger time is in the past, adjusting to next occurrence');
           triggerTime.setDate(triggerTime.getDate() + 1);
         }
-
-        console.log('Final trigger time:', triggerTime.toISOString());
 
         // Create notification record
         await NotificationManager.createNotification(updatedReminder, triggerTime);
 
         // Schedule the notification
-        await NotificationService.scheduleNotification(updatedReminder, triggerTime);
+        await NotificationService.scheduleReminder(updatedReminder);
       } catch (notifError) {
-        console.log('Notification setup skipped:', notifError.message);
         // Continue even if notification fails
       }
 
@@ -740,6 +730,9 @@ const CreateReminderScreen = ({ navigation, route }) => {
       // Navigate back after showing success
       setTimeout(() => {
         setShowSuccess(false);
+        // Reset state for next use
+        setReminderData(getInitialState());
+        setCurrentStep(1);
         navigation.navigate('ReminderList', { refresh: true });
       }, 2500);
     } catch (error) {
@@ -780,10 +773,6 @@ const CreateReminderScreen = ({ navigation, route }) => {
   }
 
   const renderCategorySelection = () => {
-    console.log('🎯 RENDERING CATEGORY SELECTION');
-    console.log('  Current reminderData.category:', reminderData.category);
-    console.log('  Edit Mode:', editMode);
-
     return (
       <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
         <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>
@@ -792,9 +781,6 @@ const CreateReminderScreen = ({ navigation, route }) => {
         <View style={styles.categoryGrid}>
           {CATEGORIES.map((cat) => {
             const isSelected = reminderData.category === cat.id;
-            console.log(
-              `  Category ${cat.id}: isSelected=${isSelected} (comparing '${reminderData.category}' === '${cat.id}')`
-            );
 
             return (
               <TouchableOpacity
@@ -854,7 +840,6 @@ const CreateReminderScreen = ({ navigation, route }) => {
         />
       </View>
       <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>Frequency</Text>
-      {console.log('🔄 Rendering Medication Frequency - Current type:', reminderData.type)}
       {/* Reusing reminderTypes but filtering or simplifying if needed */}
       {reminderTypes.slice(0, 2).map(
         (
@@ -1050,7 +1035,6 @@ const CreateReminderScreen = ({ navigation, route }) => {
       <Text style={[styles.sectionTitle, isDarkMode && styles.sectionTitleDark]}>
         Select Reminder Type
       </Text>
-      {console.log('🔄 Rendering Others Type Selection - Current type:', reminderData.type)}
       {reminderTypes.map((type) => (
         <TouchableOpacity
           key={type.id}
@@ -1930,19 +1914,9 @@ const CreateReminderScreen = ({ navigation, route }) => {
           mode="time"
           display="default"
           onChange={(event, selectedTime) => {
-            console.log('⏰ Time Picker Changed:');
-            console.log('  - Event:', event);
-            console.log('  - Selected Time:', selectedTime);
-            if (selectedTime) {
-              console.log('  - ISO:', selectedTime.toISOString());
-              console.log('  - Hours:', selectedTime.getHours());
-              console.log('  - Minutes:', selectedTime.getMinutes());
-            }
-
             setShowTimePicker(false);
             if (selectedTime) {
               if (reminderData.type === 'hourly') {
-                console.log('  - Saving to hourlyStartTime');
                 setReminderData({ ...reminderData, hourlyStartTime: selectedTime });
               } else if (reminderData.type === '15days') {
                 setReminderData({ ...reminderData, fifteenDaysTime: selectedTime });

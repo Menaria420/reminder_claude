@@ -47,7 +47,6 @@ class NotificationService {
       // Set up notification categories (Snooze/Complete)
       await this.setupCategories();
 
-      console.log('NotificationService initialized');
       return true;
     } catch (error) {
       console.error('Error initializing NotificationService:', error);
@@ -73,7 +72,6 @@ class NotificationService {
         return false;
       }
 
-      console.log('Notification permissions granted');
       return true;
     } catch (error) {
       console.error('Error requesting notification permissions:', error);
@@ -102,7 +100,6 @@ class NotificationService {
           },
         },
       ]);
-      console.log('Notification categories set up');
     } catch (error) {
       console.error('Error setting up notification categories:', error);
     }
@@ -146,8 +143,6 @@ class NotificationService {
         lightColor: '#8B5CF6',
         sound: 'default',
       });
-
-      console.log('Android notification channels set up');
     } catch (error) {
       console.error('Error setting up Android channels:', error);
     }
@@ -160,7 +155,6 @@ class NotificationService {
     // Listener for notifications received while app is foregrounded
     this.notificationListener = Notifications.addNotificationReceivedListener(
       async (notification) => {
-        console.log('Notification received:', notification);
         await this.handleNotificationReceived(notification);
       }
     );
@@ -168,7 +162,6 @@ class NotificationService {
     // Listener for user interactions with notifications
     this.responseListener = Notifications.addNotificationResponseReceivedListener(
       async (response) => {
-        console.log('Notification response:', response);
         await this.handleNotificationResponse(response);
       }
     );
@@ -208,7 +201,7 @@ class NotificationService {
             }, durationSeconds * 1000);
           }
         } catch (audioError) {
-          console.log('Error playing custom sound:', audioError);
+          // Ignore audio error
         }
       }
     } catch (error) {
@@ -226,7 +219,6 @@ class NotificationService {
 
       if (actionIdentifier === 'snooze') {
         // Handle Snooze
-        console.log('Snoozing notification:', notificationId);
         const settings = await this.getNotificationSettings();
         const snoozeMinutes = settings.snoozeTime || 10;
 
@@ -250,7 +242,6 @@ class NotificationService {
         // Update status? Maybe keep as triggered or set to snoozed if we had that status
       } else if (actionIdentifier === 'complete') {
         // Handle Complete
-        console.log('Marking notification as complete:', notificationId);
         if (notificationId) {
           await NotificationManager.updateNotificationStatus(notificationId, 'completed');
         }
@@ -273,34 +264,34 @@ class NotificationService {
    * @param {Object} notificationData - The notification data from NotificationManager
    * @param {Date} triggerTime - When to trigger the notification
    */
-  static async scheduleNotification(notificationData, triggerTime = null) {
+  static async scheduleNotification(notificationData, triggerOrDate = null) {
     try {
       const settings = await this.getNotificationSettings();
 
       // Check if notifications are enabled
       if (!settings.notificationsEnabled) {
-        console.log('Notifications are disabled');
         return null;
       }
 
-      const trigger = triggerTime
-        ? new Date(triggerTime)
-        : new Date(notificationData.scheduledTime);
-
-      console.log('⏰ SCHEDULING NOTIFICATION:');
-      console.log('  - Title:', notificationData.title);
-      console.log('  - Trigger Time (input):', triggerTime?.toISOString());
-      console.log('  - Trigger Time (parsed):', trigger.toISOString());
-      console.log('  - Trigger Hours:', trigger.getHours());
-      console.log('  - Trigger Minutes:', trigger.getMinutes());
-      console.log('  - Trigger Seconds:', trigger.getSeconds());
-      console.log('  - Trigger Milliseconds:', trigger.getMilliseconds());
-      console.log('  - Current Time:', new Date().toISOString());
-      console.log('  - Time until trigger (ms):', trigger.getTime() - Date.now());
-      console.log(
-        '  - Time until trigger (minutes):',
-        Math.round((trigger.getTime() - Date.now()) / 60000)
-      );
+      let trigger;
+      // Handle Date object or Timestamp (legacy/one-off)
+      if (triggerOrDate instanceof Date || typeof triggerOrDate === 'number') {
+        trigger = {
+          type: 'date',
+          date: new Date(triggerOrDate).getTime(),
+          repeats: false,
+        };
+      } else if (triggerOrDate && typeof triggerOrDate === 'object') {
+        // Use provided trigger configuration directly (for repeating notifications)
+        trigger = triggerOrDate;
+      } else {
+        // Fallback to data.scheduledTime
+        trigger = {
+          type: 'date',
+          date: new Date(notificationData.scheduledTime).getTime(),
+          repeats: false,
+        };
+      }
 
       // Get channel ID based on category
       const channelId =
@@ -315,8 +306,6 @@ class NotificationService {
           category: notificationData.category,
           ringTone: notificationData.ringTone,
         },
-        // In Expo Go, custom sounds don't work in background. We force 'default' to ensure SOME sound plays.
-        // In a production build with custom assets bundled, you would use: notificationData.ringTone
         sound: settings.soundEnabled
           ? notificationData.ringTone
             ? `${notificationData.ringTone}.wav`
@@ -324,30 +313,19 @@ class NotificationService {
           : null,
         vibrate: settings.vibrationEnabled ? [0, 250, 250, 250] : [],
         priority: Notifications.AndroidNotificationPriority.HIGH,
-        categoryIdentifier: 'reminder', // Link to the category with Snooze/Complete actions
+        categoryIdentifier: 'reminder',
         ...(channelId && { channelId }),
-        // Android only: Cancel notification after duration
         ...(Platform.OS === 'android' &&
           settings.notificationDuration > 0 && {
             timeoutAfter: settings.notificationDuration * 1000,
           }),
       };
 
-      // Use exact timestamp for more precise scheduling
-      const exactTrigger = {
-        type: 'date',
-        date: trigger.getTime(), // Use timestamp instead of Date object
-        repeats: false,
-      };
-
-      console.log('  - Using exact trigger with timestamp:', trigger.getTime());
-
       const scheduledNotificationId = await Notifications.scheduleNotificationAsync({
         content: notificationContent,
-        trigger: exactTrigger,
+        trigger,
       });
 
-      console.log('✅ Notification scheduled with ID:', scheduledNotificationId);
       return scheduledNotificationId;
     } catch (error) {
       console.error('Error scheduling notification:', error);
@@ -356,27 +334,88 @@ class NotificationService {
   }
 
   /**
+   * Schedule notifications based on reminder type
+   */
+  static async scheduleReminder(reminder) {
+    switch (reminder.type) {
+      case 'hourly':
+        return this.scheduleHourlyNotifications(reminder);
+      case 'weekly':
+        return this.scheduleWeeklyNotifications(reminder);
+      case 'monthly':
+        return this.scheduleMonthlyNotifications(reminder);
+      default:
+        // One-off (Custom/15days handled as one-off for now or add logic)
+        // For custom, if it's "Daily", we can treat as 24h interval
+        if (reminder.type === 'custom' && reminder.customSettings?.dateRepeat === 'every') {
+          // Daily repeat
+          const time = new Date(reminder.customSettings.time);
+          return this.scheduleNotification(reminder, {
+            hour: time.getHours(),
+            minute: time.getMinutes(),
+            repeats: true,
+          });
+        }
+        // Default one-off based on provided/calculated time
+        // Since we don't have the 'next' time here easily without recalculation,
+        // rely on passed logic or calculate it?
+        // For now, if called from CreateReminder, it handles one-off manually.
+        // If called from reschedule, we might need logic.
+        return null;
+    }
+  }
+
+  /**
    * Schedule notifications for hourly reminders
    */
-  static async scheduleHourlyNotifications(reminderData, hours = 1, count = 24) {
+  static async scheduleHourlyNotifications(reminder) {
     try {
       const scheduledIds = [];
-      const now = new Date();
+      const startTime = new Date(reminder.hourlyStartTime);
+      const interval = parseInt(reminder.hourlyInterval) || 1;
+      const minutes = startTime.getMinutes();
 
-      for (let i = 0; i < count; i++) {
-        const triggerTime = new Date(now.getTime() + hours * 60 * 60 * 1000 * (i + 1));
-        const notification = await NotificationManager.createNotification(
-          reminderData,
-          triggerTime
-        );
-        const scheduledId = await this.scheduleNotification(notification, triggerTime);
+      // If interval divides 24 smoothly, we can use daily repeating triggers
+      if (24 % interval === 0) {
+        const startHour = startTime.getHours();
 
-        if (scheduledId) {
-          scheduledIds.push({ notificationId: notification.id, scheduledId });
+        // Schedule for today/tomorrow coverage (daily repeats)
+        // We start from the user's selected hour and add intervals
+        for (let i = 0; i < 24 / interval; i++) {
+          const hour = (startHour + i * interval) % 24;
+
+          const scheduledId = await this.scheduleNotification(reminder, {
+            hour,
+            minute: minutes,
+            repeats: true,
+          });
+
+          if (scheduledId) scheduledIds.push({ notificationId: reminder.id, scheduledId });
+        }
+      } else {
+        // Fallback for non-standard intervals: Schedule 24 occurrences one-off
+        const now = new Date();
+        const triggerTime = new Date(now);
+        triggerTime.setMinutes(minutes);
+        triggerTime.setSeconds(0);
+
+        // Find next hour that matches pattern relative to startTime
+        // This is complex, simplifying to just "Start from now+interval" is safer for user expectation if they just created it
+        // But user wants "Trigger on applied time".
+        // Let's just schedule next 24 intervals starting from strict logic
+
+        let current = new Date(startTime);
+        while (current <= now) {
+          current.setHours(current.getHours() + interval);
+        }
+
+        for (let i = 0; i < 24; i++) {
+          const id = await this.scheduleNotification(reminder, new Date(current));
+          if (id) scheduledIds.push({ notificationId: reminder.id, scheduledId });
+          current.setHours(current.getHours() + interval);
         }
       }
 
-      console.log(`Scheduled ${scheduledIds.length} hourly notifications`);
       return scheduledIds;
     } catch (error) {
       console.error('Error scheduling hourly notifications:', error);
@@ -387,58 +426,238 @@ class NotificationService {
   /**
    * Schedule notifications for weekly reminders
    */
-  static async scheduleWeeklyNotifications(reminderData, weeklyDays, weeklyTimes) {
+  static async scheduleWeeklyNotifications(reminder) {
     try {
       const scheduledIds = [];
-      const now = new Date();
+      const weeklyDays = reminder.weeklyDays || [];
+      const weeklyTimes = reminder.weeklyTimes || {};
 
-      // Map day names to day numbers (0 = Sunday, 1 = Monday, etc.)
       const dayMap = {
-        Sun: 0,
-        Mon: 1,
-        Tue: 2,
-        Wed: 3,
-        Thu: 4,
-        Fri: 5,
-        Sat: 6,
+        Sun: 1,
+        Mon: 2,
+        Tue: 3,
+        Wed: 4,
+        Thu: 5,
+        Fri: 6,
+        Sat: 7,
       };
 
       for (const day of weeklyDays) {
-        for (const time of weeklyTimes) {
-          const [hours, minutesPart] = time.split(':');
+        const weekday = dayMap[day];
+        const times = weeklyTimes[day] || [];
+
+        for (const timeStr of times) {
+          const [hours, minutesPart] = timeStr.trim().split(':');
           const [minutes, period] = minutesPart.split(' ');
 
           let hour = parseInt(hours);
           if (period === 'PM' && hour !== 12) hour += 12;
           if (period === 'AM' && hour === 12) hour = 0;
 
-          const targetDay = dayMap[day];
-          const triggerTime = new Date(now);
+          const scheduledId = await this.scheduleNotification(reminder, {
+            weekday,
+            hour,
+            minute: parseInt(minutes),
+            repeats: true,
+          });
 
-          // Calculate next occurrence of this day
-          const currentDay = triggerTime.getDay();
-          let daysUntilTarget = targetDay - currentDay;
-          if (daysUntilTarget <= 0) daysUntilTarget += 7;
-
-          triggerTime.setDate(triggerTime.getDate() + daysUntilTarget);
-          triggerTime.setHours(hour, parseInt(minutes), 0, 0);
-
-          const notification = await NotificationManager.createNotification(
-            reminderData,
-            triggerTime
-          );
-          const scheduledId = await this.scheduleNotification(notification, triggerTime);
-
-          if (scheduledId) {
-            scheduledIds.push({ notificationId: notification.id, scheduledId });
-          }
+          if (scheduledId) scheduledIds.push({ notificationId: reminder.id, scheduledId });
         }
       }
 
-      console.log(`Scheduled ${scheduledIds.length} weekly notifications`);
       return scheduledIds;
     } catch (error) {
       console.error('Error scheduling weekly notifications:', error);
+      return [];
+    }
+  }
+
+  static async scheduleMonthlyNotifications(reminder) {
+    try {
+      const scheduledIds = [];
+      const date = reminder.monthlyDate;
+      const time = new Date(reminder.monthlyTime);
+      const hour = time.getHours();
+      const minute = time.getMinutes();
+
+      if (date === 'last') {
+        // 'last' day is hard to repeat natively. Schedule 12 months manual?
+        // Or find logic. For now, schedule 6 months manual.
+        const current = new Date();
+        for (let i = 0; i < 6; i++) {
+          const target = new Date(current.getFullYear(), current.getMonth() + 1 + i, 0); // Last day
+          target.setHours(hour, minute, 0, 0);
+          const id = await this.scheduleNotification(reminder, target);
+          if (id) scheduledIds.push({ notificationId: reminder.id, scheduledId });
+        }
+      } else {
+        // Specific date (1-31)
+        if (Platform.OS === 'android') {
+          // Android restriction: 'calendar' trigger with 'day' is not supported.
+          // Schedule 12 months manually.
+          const current = new Date();
+          for (let i = 0; i < 12; i++) {
+            // Calculate next occurrence of this 'date'
+            let target = new Date(
+              current.getFullYear(),
+              current.getMonth() + i,
+              date,
+              hour,
+              minute
+            );
+            // Adjust if target is in past
+            if (target < new Date()) {
+              target = new Date(
+                current.getFullYear(),
+                current.getMonth() + i + 1,
+                date,
+                hour,
+                minute
+              );
+            }
+            const id = await this.scheduleNotification(reminder, target);
+            if (id) scheduledIds.push({ notificationId: reminder.id, scheduledId: id });
+          }
+        } else {
+          // iOS supports native monthly repeat
+          const scheduledId = await this.scheduleNotification(reminder, {
+            day: date,
+            hour,
+            minute,
+            repeats: true,
+          });
+          if (scheduledId) scheduledIds.push({ notificationId: reminder.id, scheduledId });
+        }
+      }
+      return scheduledIds;
+    } catch (error) {
+      console.error('Error scheduling monthly:', error);
+      return [];
+    }
+  }
+
+  static async scheduleIntervalNotifications(reminder, intervalHours) {
+    try {
+      const scheduledIds = [];
+      // 15 Days typcially uses fifteenDaysStart
+      const startTime = new Date(reminder.fifteenDaysStart || new Date());
+      const now = new Date();
+
+      // Calculate start point: ensure we start in the future or today
+      // If startTime is old, fast forward
+      let current = new Date(startTime);
+      while (current < now) {
+        current.setHours(current.getHours() + intervalHours);
+      }
+
+      // Schedule 24 occurrences (assuming 15 days -> ~1 year)
+      for (let i = 0; i < 24; i++) {
+        const id = await this.scheduleNotification(reminder, new Date(current));
+        if (id) scheduledIds.push({ notificationId: reminder.id, scheduledId });
+        current.setHours(current.getHours() + intervalHours);
+      }
+      return scheduledIds;
+    } catch (error) {
+      console.error('Error scheduling interval notifications:', error);
+      return [];
+    }
+  }
+
+  static async scheduleCustomNotifications(reminder) {
+    try {
+      const scheduledIds = []; // Initialize scheduledIds for this function
+      const settings = reminder.customSettings;
+      if (!settings) return [];
+      const time = new Date(settings.time);
+      const hour = time.getHours();
+      const minute = time.getMinutes();
+
+      if (settings.dateRepeat === 'every') {
+        // Daily
+        const id = await this.scheduleNotification(reminder, {
+          hour,
+          minute,
+          repeats: true,
+        });
+        return id ? [{ notificationId: reminder.id, scheduledId: id }] : [];
+      }
+
+      if (settings.monthRepeat === 'every') {
+        // Monthly
+        const date = parseInt(settings.date);
+
+        if (Platform.OS === 'android') {
+          // Android restriction: manual schedule 12 months
+          const current = new Date();
+          for (let i = 0; i < 12; i++) {
+            let target = new Date(
+              current.getFullYear(),
+              current.getMonth() + i,
+              date,
+              hour,
+              minute
+            );
+            if (target < new Date()) {
+              target = new Date(
+                current.getFullYear(),
+                current.getMonth() + i + 1,
+                date,
+                hour,
+                minute
+              );
+            }
+            const id = await this.scheduleNotification(reminder, target);
+            if (id) scheduledIds.push({ notificationId: reminder.id, scheduledId: id });
+          }
+          return scheduledIds;
+        } else {
+          const id = await this.scheduleNotification(reminder, {
+            day: date,
+            hour,
+            minute,
+            repeats: true,
+          });
+          return id ? [{ notificationId: reminder.id, scheduledId: id }] : [];
+        }
+      }
+
+      if (settings.yearRepeat === 'every') {
+        // Yearly
+        const month = parseInt(settings.month);
+        const date = parseInt(settings.date);
+
+        if (Platform.OS === 'android') {
+          // Android: Schedule 5 years manually
+          const current = new Date();
+          for (let i = 0; i < 5; i++) {
+            const target = new Date(current.getFullYear() + i, month - 1, date, hour, minute);
+            if (target < new Date()) target.setFullYear(target.getFullYear() + 1); // Ensure future
+            const id = await this.scheduleNotification(reminder, target);
+            if (id) scheduledIds.push({ notificationId: reminder.id, scheduledId: id });
+          }
+          return scheduledIds;
+        } else {
+          // iOS Native
+          const id = await this.scheduleNotification(reminder, {
+            month: parseInt(settings.month),
+            day: date,
+            hour,
+            minute,
+            repeats: true,
+          });
+          return id ? [{ notificationId: reminder.id, scheduledId: id }] : [];
+        }
+      }
+
+      // Specific Date (One-off)
+      const target = new Date(settings.year, settings.month - 1, settings.date, hour, minute);
+      if (target > new Date()) {
+        const id = await this.scheduleNotification(reminder, target);
+        return id ? [{ notificationId: reminder.id, scheduledId: id }] : [];
+      }
+      return [];
+    } catch (error) {
+      console.error('Error scheduling custom notifications:', error);
       return [];
     }
   }
@@ -449,7 +668,6 @@ class NotificationService {
   static async cancelNotification(scheduledNotificationId) {
     try {
       await Notifications.cancelScheduledNotificationAsync(scheduledNotificationId);
-      console.log('Notification cancelled:', scheduledNotificationId);
       return true;
     } catch (error) {
       console.error('Error cancelling notification:', error);
@@ -475,7 +693,6 @@ class NotificationService {
       // Also delete from NotificationManager
       await NotificationManager.deleteNotificationsByReminderId(reminderId);
 
-      console.log('Cancelled all notifications for reminder:', reminderId);
       return true;
     } catch (error) {
       console.error('Error cancelling notifications for reminder:', error);
@@ -489,7 +706,6 @@ class NotificationService {
   static async cancelAllNotifications() {
     try {
       await Notifications.cancelAllScheduledNotificationsAsync();
-      console.log('All notifications cancelled');
       return true;
     } catch (error) {
       console.error('Error cancelling all notifications:', error);
@@ -515,34 +731,27 @@ class NotificationService {
    */
   static async rescheduleAllNotifications() {
     try {
-      console.log('Rescheduling all notifications to apply new settings...');
-
       // 1. Cancel all system notifications
       await Notifications.cancelAllScheduledNotificationsAsync();
 
-      // 2. Get all pending notifications from our local manager
-      const pendingNotifications = await NotificationManager.getPendingNotifications();
-
-      console.log(`Found ${pendingNotifications.length} pending notifications to reschedule`);
-
-      // 3. Reschedule each one
+      // 2. Get master list of reminders
+      const remindersJson = await AsyncStorage.getItem('reminders');
       let count = 0;
-      const now = new Date();
 
-      for (const notification of pendingNotifications) {
-        const triggerTime = new Date(notification.scheduledTime);
+      if (remindersJson) {
+        const reminders = JSON.parse(remindersJson);
 
-        // Only reschedule if time hasn't passed (or is very close)
-        // If it's in the past, it might have been missed or is about to fire
-        if (triggerTime > now) {
-          await this.scheduleNotification(notification, triggerTime);
-          count++;
-        } else {
-          console.log('Skipping past notification:', notification.id, triggerTime);
+        // 3. Reschedule each active reminder using full logic
+        for (const reminder of reminders) {
+          // If isActive is undefined, assume true (legacy)
+          if (reminder.isActive !== false) {
+            await this.scheduleReminder(reminder);
+            count++;
+          }
         }
       }
 
-      console.log(`Successfully rescheduled ${count} notifications`);
+      console.log(`Rescheduled ${count} reminders`);
       return true;
     } catch (error) {
       console.error('Error rescheduling notifications:', error);
@@ -589,7 +798,6 @@ class NotificationService {
   static async saveNotificationSettings(settings) {
     try {
       await AsyncStorage.setItem(NOTIFICATION_SETTINGS_KEY, JSON.stringify(settings));
-      console.log('Notification settings saved');
       return true;
     } catch (error) {
       console.error('Error saving notification settings:', error);
