@@ -170,7 +170,8 @@ const HomeScreen = ({ navigation, route }) => {
 
   const getReminderIcon = (type) => {
     const icons = {
-      hourly: 'access-time',
+      daily: 'access-time',
+      hourly: 'access-time', // backward compatibility
       weekly: 'date-range',
       '15days': 'refresh',
       monthly: 'calendar-today',
@@ -181,7 +182,8 @@ const HomeScreen = ({ navigation, route }) => {
 
   const getReminderColor = (type) => {
     const colors = {
-      hourly: ['#3B82F6', '#2563EB'],
+      daily: ['#3B82F6', '#2563EB'],
+      hourly: ['#3B82F6', '#2563EB'], // backward compatibility
       weekly: ['#10B981', '#059669'],
       '15days': ['#8B5CF6', '#7C3AED'],
       monthly: ['#F59E0B', '#D97706'],
@@ -192,7 +194,8 @@ const HomeScreen = ({ navigation, route }) => {
 
   const getIconForType = (type) => {
     const icons = {
-      hourly: 'access-time',
+      daily: 'access-time',
+      hourly: 'access-time', // backward compatibility
       weekly: 'date-range',
       '15days': 'refresh',
       monthly: 'calendar-today',
@@ -217,7 +220,7 @@ const HomeScreen = ({ navigation, route }) => {
     const activeCount = reminders.filter((r) => r.isActive).length;
     const inactiveCount = reminders.filter((r) => !r.isActive).length;
     const totalCount = reminders.length;
-    const hourlyCount = reminders.filter((r) => r.type === 'hourly').length;
+    const dailyCount = reminders.filter((r) => r.type === 'daily' || r.type === 'hourly').length;
     const weeklyCount = reminders.filter((r) => r.type === 'weekly').length;
     const monthlyCount = reminders.filter((r) => r.type === 'monthly').length;
     const customCount = reminders.filter((r) => r.type === 'custom').length;
@@ -227,7 +230,7 @@ const HomeScreen = ({ navigation, route }) => {
     const allData = [
       { count: activeCount, color: '#00FF87', label: 'Active' },
       { count: inactiveCount, color: '#FF3366', label: 'Inactive' },
-      { count: hourlyCount, color: '#00D4FF', label: 'Hourly' },
+      { count: dailyCount, color: '#00D4FF', label: 'Daily' },
       { count: weeklyCount, color: '#FFAA00', label: 'Weekly' },
       { count: monthlyCount, color: '#FF6B35', label: 'Monthly' },
       { count: fifteenDaysCount, color: '#8B5CF6', label: '15 Days' },

@@ -338,8 +338,9 @@ class NotificationService {
    */
   static async scheduleReminder(reminder) {
     switch (reminder.type) {
-      case 'hourly':
-        return this.scheduleHourlyNotifications(reminder);
+      case 'daily':
+      case 'hourly': // backward compatibility
+        return this.scheduleDailyNotifications(reminder);
       case 'weekly':
         return this.scheduleWeeklyNotifications(reminder);
       case 'monthly':
@@ -366,13 +367,23 @@ class NotificationService {
   }
 
   /**
-   * Schedule notifications for hourly reminders
+   * Schedule notifications for daily reminders
    */
-  static async scheduleHourlyNotifications(reminder) {
+  static async scheduleDailyNotifications(reminder) {
     try {
       const scheduledIds = [];
-      const startTime = new Date(reminder.hourlyStartTime);
-      const interval = parseInt(reminder.hourlyInterval) || 1;
+
+      // Handle exact mode
+      if (reminder.dailyMode === 'exact') {
+        const exactTime = new Date(reminder.dailyExactDateTime);
+        const id = await this.scheduleNotification(reminder, exactTime);
+        if (id) scheduledIds.push({ notificationId: reminder.id, scheduledId: id });
+        return scheduledIds;
+      }
+
+      // Handle interval mode
+      const startTime = new Date(reminder.dailyStartTime || reminder.hourlyStartTime);
+      const interval = parseInt(reminder.dailyInterval || reminder.hourlyInterval) || 1;
       const minutes = startTime.getMinutes();
 
       // If interval divides 24 smoothly, we can use daily repeating triggers
@@ -418,7 +429,7 @@ class NotificationService {
 
       return scheduledIds;
     } catch (error) {
-      console.error('Error scheduling hourly notifications:', error);
+      console.error('Error scheduling daily notifications:', error);
       return [];
     }
   }

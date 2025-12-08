@@ -19,15 +19,28 @@ export const getReminderDisplayTime = (reminder) => {
     if (!reminder) return '';
     const now = new Date();
 
-    if (reminder.type === 'hourly') {
-      // Convert string to Date if needed
+    if (reminder.type === 'daily' || reminder.type === 'hourly') {
+      // Handle exact mode
+      if (reminder.dailyMode === 'exact') {
+        const exactTime = new Date(reminder.dailyExactDateTime);
+        if (!isNaN(exactTime.getTime())) {
+          const hours = exactTime.getHours();
+          const minutes = exactTime.getMinutes();
+          const period = hours >= 12 ? 'PM' : 'AM';
+          const displayHours = hours % 12 || 12;
+          const displayMinutes = minutes.toString().padStart(2, '0');
+          return `${exactTime.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${displayHours}:${displayMinutes} ${period}`;
+        }
+      }
+
+      // Convert string to Date if needed (backward compatibility)
       const startTime =
-        reminder.hourlyStartTime instanceof Date
-          ? reminder.hourlyStartTime
-          : new Date(reminder.hourlyStartTime);
+        (reminder.dailyStartTime || reminder.hourlyStartTime) instanceof Date
+          ? (reminder.dailyStartTime || reminder.hourlyStartTime)
+          : new Date(reminder.dailyStartTime || reminder.hourlyStartTime);
 
       if (isNaN(startTime.getTime())) {
-        return `Every ${reminder.hourlyInterval || 1} hour(s)`;
+        return `Every ${reminder.dailyInterval || reminder.hourlyInterval || 1} hour(s)`;
       }
 
       // Use TODAY's date with the selected time
@@ -36,7 +49,7 @@ export const getReminderDisplayTime = (reminder) => {
 
       // Adjust to future
       while (nextTime < now) {
-        nextTime.setHours(nextTime.getHours() + (reminder.hourlyInterval || 1));
+        nextTime.setHours(nextTime.getHours() + (reminder.dailyInterval || reminder.hourlyInterval || 1));
       }
 
       const hours = nextTime.getHours();
@@ -152,27 +165,35 @@ export const getFormattedNextTrigger = (reminder) => {
     const now = new Date();
     let nextTrigger = null;
 
-    if (reminder.type === 'hourly') {
-      // Convert string to Date if needed
-      const startTime =
-        reminder.hourlyStartTime instanceof Date
-          ? reminder.hourlyStartTime
-          : new Date(reminder.hourlyStartTime);
+    if (reminder.type === 'daily' || reminder.type === 'hourly') {
+      // Handle exact mode
+      if (reminder.dailyMode === 'exact') {
+        nextTrigger = new Date(reminder.dailyExactDateTime);
+        if (isNaN(nextTrigger.getTime())) {
+          return 'Invalid date/time';
+        }
+      } else {
+        // Convert string to Date if needed (backward compatibility)
+        const startTime =
+          (reminder.dailyStartTime || reminder.hourlyStartTime) instanceof Date
+            ? (reminder.dailyStartTime || reminder.hourlyStartTime)
+            : new Date(reminder.dailyStartTime || reminder.hourlyStartTime);
 
-      if (isNaN(startTime.getTime())) {
-        return 'Invalid time';
-      }
+        if (isNaN(startTime.getTime())) {
+          return 'Invalid time';
+        }
 
-      // IMPORTANT: Use TODAY's date with the selected time
-      // Don't use the stored date as it might be from the past
-      nextTrigger = new Date();
-      nextTrigger.setHours(startTime.getHours(), startTime.getMinutes(), 0, 0);
+        // IMPORTANT: Use TODAY's date with the selected time
+        // Don't use the stored date as it might be from the past
+        nextTrigger = new Date();
+        nextTrigger.setHours(startTime.getHours(), startTime.getMinutes(), 0, 0);
 
-      const interval = reminder.hourlyInterval || 1;
+        const interval = reminder.dailyInterval || reminder.hourlyInterval || 1;
 
-      // Find next occurrence
-      while (nextTrigger < now) {
-        nextTrigger.setHours(nextTrigger.getHours() + interval);
+        // Find next occurrence
+        while (nextTrigger < now) {
+          nextTrigger.setHours(nextTrigger.getHours() + interval);
+        }
       }
     } else if (reminder.type === 'weekly') {
       // Find the next occurrence

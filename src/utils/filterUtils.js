@@ -232,12 +232,12 @@ export const sortByTime = (reminders, direction = 'early') => {
  */
 export const sortByFrequency = (reminders) => {
   const frequencyOrder = {
-    hourly: 1,
-    daily: 2,
-    weekly: 3,
-    '15days': 4,
-    monthly: 5,
-    custom: 6,
+    daily: 1,
+    hourly: 1, // backward compatibility, same priority as daily
+    weekly: 2,
+    '15days': 3,
+    monthly: 4,
+    custom: 5,
   };
 
   return [...reminders].sort((a, b) => {

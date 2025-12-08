@@ -108,7 +108,8 @@ const ReminderListScreen = ({ navigation, route }) => {
 
   const getReminderIcon = (type) => {
     const icons = {
-      hourly: 'access-time',
+      daily: 'access-time',
+      hourly: 'access-time', // backward compatibility
       weekly: 'date-range',
       '15days': 'refresh',
       monthly: 'calendar-today',
@@ -119,7 +120,8 @@ const ReminderListScreen = ({ navigation, route }) => {
 
   const getReminderColor = (type) => {
     const colors = {
-      hourly: ['#3B82F6', '#2563EB'],
+      daily: ['#3B82F6', '#2563EB'],
+      hourly: ['#3B82F6', '#2563EB'], // backward compatibility
       weekly: ['#10B981', '#059669'],
       '15days': ['#8B5CF6', '#7C3AED'],
       monthly: ['#F59E0B', '#D97706'],
@@ -171,6 +173,7 @@ const ReminderListScreen = ({ navigation, route }) => {
           styles.reminderCard,
           !item.isActive && styles.reminderCardInactive,
           isDarkMode && styles.reminderCardDark,
+          { borderLeftColor: colors[0] },
         ]}
       >
         {/* Card Header - Category, Type & Priority */}
@@ -307,7 +310,7 @@ const ReminderListScreen = ({ navigation, route }) => {
 
   const typeFilters = [
     { id: 'all', label: 'All', icon: 'list' },
-    { id: 'hourly', label: 'Hourly', icon: 'access-time' },
+    { id: 'daily', label: 'Daily', icon: 'access-time' },
     { id: 'weekly', label: 'Weekly', icon: 'date-range' },
     { id: '15days', label: '15 Days', icon: 'refresh' },
     { id: 'monthly', label: 'Monthly', icon: 'calendar-today' },
