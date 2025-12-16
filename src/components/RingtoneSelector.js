@@ -1,97 +1,91 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  Modal,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  Animated,
-} from 'react-native';
+import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet, Alert } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
 import { ThemeContext } from '../context/ThemeContext';
 
-import { RINGTONE_FILES, RINGTONES } from '../constants/ringtones';
+import { RINGTONES, RINGTONE_FILES } from '../constants/ringtones';
 
 const RingtoneSelector = ({ visible, onClose, selectedRingtone, onSelect }) => {
   const { isDarkMode } = useContext(ThemeContext);
-  const [currentlyPlaying, setCurrentlyPlaying] = useState(null);
-  const soundRef = useRef(null);
+  const [previewId, setPreviewId] = useState(null);
+  const soundObjectRef = useRef(null);
 
+  // Cleanup when modal closes
   useEffect(() => {
-    // Configure audio mode
-    const configureAudio = async () => {
-      try {
-        await Audio.setAudioModeAsync({
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: false,
-          shouldDuckAndroid: true,
-          playThroughEarpieceAndroid: false,
-          allowsRecordingIOS: false,
-          interruptionModeIOS: 1, // DoNotMix
-          interruptionModeAndroid: 1, // DoNotMix
-        });
-      } catch (error) {
-        console.error('❌ Error configuring audio:', error);
-      }
-    };
-    configureAudio();
+    if (!visible) {
+      setPreviewId(null);
+      stopSound();
+    }
+  }, [visible]);
 
-    // Cleanup on unmount
+  // Clean up sound on unmount
+  useEffect(() => {
     return () => {
-      if (soundRef.current) {
-        soundRef.current.unloadAsync();
-      }
+      stopSound();
     };
   }, []);
 
-  // Cleanup sound when modal closes
-  useEffect(() => {
-    if (!visible && soundRef.current) {
-      soundRef.current.unloadAsync();
-      soundRef.current = null;
-      setCurrentlyPlaying(null);
+  const stopSound = async () => {
+    try {
+      if (soundObjectRef.current) {
+        await soundObjectRef.current.unloadAsync();
+        soundObjectRef.current = null;
+      }
+    } catch (error) {
+      console.log('Error stopping sound', error);
     }
-  }, [visible]);
+  };
 
   const handleVibrate = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const playRingtone = async (ringtoneId) => {
+    handleVibrate();
+
+    // If clicking the same one, stop preview
+    if (previewId === ringtoneId) {
+      setPreviewId(null);
+      await stopSound();
+      return;
+    }
+
     try {
-      handleVibrate();
+      // Stop previous sound
+      await stopSound();
 
-      // Stop any currently playing sound
-      if (soundRef.current) {
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
+      // Show preview state
+      setPreviewId(ringtoneId);
+
+      // Load and play new sound
+      const soundSource = RINGTONE_FILES[ringtoneId];
+      if (soundSource) {
+        // Set audio mode to allow playing even if silent switch is on (optional, but good for previews)
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+        });
+
+        const { sound } = await Audio.Sound.createAsync(soundSource, { shouldPlay: true });
+
+        soundObjectRef.current = sound;
+
+        // Reset preview state when playback finishes
+        sound.setOnPlaybackStatusUpdate((status) => {
+          if (status.didJustFinish) {
+            setPreviewId(null);
+            sound.unloadAsync();
+            soundObjectRef.current = null;
+          }
+        });
       }
-
-      setCurrentlyPlaying(ringtoneId);
-
-      // Play the specific audio file for this ringtone
-      const source = RINGTONE_FILES[ringtoneId] || RINGTONE_FILES.default;
-
-      const { sound } = await Audio.Sound.createAsync(
-        source,
-        { shouldPlay: true, volume: 1.0 } // Auto-play with full volume
-      );
-
-      soundRef.current = sound;
-
-      // Set up completion listener
-      sound.setOnPlaybackStatusUpdate(async (status) => {
-        if (status.didJustFinish) {
-          setCurrentlyPlaying(null);
-        }
-      });
     } catch (error) {
-      console.error('❌ Error playing ringtone preview:', error);
-      setCurrentlyPlaying(null);
+      console.error('Error playing sound:', error);
+      setPreviewId(null);
+      Alert.alert('Error', 'Could not play audio preview');
     }
   };
 
@@ -116,6 +110,15 @@ const RingtoneSelector = ({ visible, onClose, selectedRingtone, onSelect }) => {
             </TouchableOpacity>
           </LinearGradient>
 
+          {/* Info Note for Expo Go */}
+          <View style={[styles.infoNote, isDarkMode && styles.infoNoteDark]}>
+            <Icon name="info" size={16} color="#667EEA" />
+            <Text style={[styles.infoText, isDarkMode && styles.infoTextDark]}>
+              Preview plays here. Note: Custom notification sounds require a development build. In
+              Expo Go, notifications use the default sound.
+            </Text>
+          </View>
+
           {/* Ringtone List */}
           <ScrollView style={styles.ringtoneList}>
             {RINGTONES.map((ringtone) => (
@@ -123,7 +126,9 @@ const RingtoneSelector = ({ visible, onClose, selectedRingtone, onSelect }) => {
                 key={ringtone.id}
                 style={[
                   styles.ringtoneItem,
+                  isDarkMode && styles.ringtoneItemDark,
                   selectedRingtone === ringtone.id && styles.ringtoneItemSelected,
+                  selectedRingtone === ringtone.id && isDarkMode && styles.ringtoneItemSelectedDark,
                 ]}
                 onPress={() => handleSelect(ringtone)}
               >
@@ -142,16 +147,16 @@ const RingtoneSelector = ({ visible, onClose, selectedRingtone, onSelect }) => {
                 </View>
 
                 <View style={styles.ringtoneRight}>
-                  {/* Play/Stop Button */}
+                  {/* Preview Button */}
                   <TouchableOpacity
-                    style={styles.playButton}
+                    style={[styles.playButton, isDarkMode && styles.playButtonDark]}
                     onPress={(e) => {
                       e.stopPropagation();
                       playRingtone(ringtone.id);
                     }}
                   >
                     <Icon
-                      name={currentlyPlaying === ringtone.id ? 'stop' : 'play-arrow'}
+                      name={previewId === ringtone.id ? 'stop' : 'play-arrow'}
                       size={20}
                       color="#667EEA"
                     />
@@ -202,6 +207,28 @@ const styles = StyleSheet.create({
   closeButton: {
     padding: 4,
   },
+  infoNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    padding: 12,
+    marginHorizontal: 12,
+    marginTop: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  infoNoteDark: {
+    backgroundColor: '#2a2f4a',
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#6B7280',
+    lineHeight: 16,
+  },
+  infoTextDark: {
+    color: '#9CA3AF',
+  },
   ringtoneList: {
     padding: 12,
   },
@@ -216,9 +243,16 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'transparent',
   },
+  ringtoneItemDark: {
+    backgroundColor: '#232946',
+  },
   ringtoneItemSelected: {
     borderColor: '#10B981',
     backgroundColor: '#F0FDF4',
+  },
+  ringtoneItemSelectedDark: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderColor: '#10B981',
   },
   ringtoneLeft: {
     flexDirection: 'row',
@@ -268,6 +302,9 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  playButtonDark: {
+    backgroundColor: '#374151',
   },
 });
 

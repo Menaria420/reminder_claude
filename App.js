@@ -1,9 +1,21 @@
+import { LogBox } from 'react-native';
+
+// Suppress specific warnings
+LogBox.ignoreLogs([
+  'Expo AV has been deprecated',
+  'expo-notifications: Android Push notifications',
+  'Calling getExpoPushTokenAsync',
+  'Non-serializable values were found in the navigation state',
+  'VirtualizedList: You have a large list that is slow to update',
+  'Warning: Cannot update a component',
+]);
+
 import React, { useState, useEffect, useContext } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { LogBox, ActivityIndicator, View, useColorScheme } from 'react-native';
+import { ActivityIndicator, View, useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import HomeScreen from './src/screens/HomeScreen';
 import CreateReminderScreen from './src/screens/CreateReminderScreen';

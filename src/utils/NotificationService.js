@@ -1,7 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Audio } from 'expo-av';
 import NotificationManager from './NotificationManager';
 import { RINGTONE_FILES } from '../constants/ringtones';
 
@@ -112,6 +111,7 @@ class NotificationService {
     if (Platform.OS !== 'android') return;
 
     try {
+      // Default channel
       await Notifications.setNotificationChannelAsync('default', {
         name: 'Default Notifications',
         importance: Notifications.AndroidImportance.MAX,
@@ -120,31 +120,34 @@ class NotificationService {
         sound: 'default',
       });
 
-      await Notifications.setNotificationChannelAsync('medication', {
-        name: 'Medication Reminders',
-        importance: Notifications.AndroidImportance.HIGH,
-        vibrationPattern: [0, 300, 200, 300],
-        lightColor: '#EF4444',
-        sound: 'default',
-      });
-
-      await Notifications.setNotificationChannelAsync('fitness', {
-        name: 'Fitness Reminders',
-        importance: Notifications.AndroidImportance.HIGH,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#10B981',
-        sound: 'default',
-      });
-
-      await Notifications.setNotificationChannelAsync('habits', {
-        name: 'Habit Reminders',
-        importance: Notifications.AndroidImportance.HIGH,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#8B5CF6',
-        sound: 'default',
-      });
+      // We will dynamically create other channels as needed based on sound
     } catch (error) {
       console.error('Error setting up Android channels:', error);
+    }
+  }
+
+  /**
+   * Ensure Android channel exists for a specific sound
+   */
+  static async ensureAndroidChannel(soundName) {
+    if (Platform.OS !== 'android') return 'default';
+
+    // valid sound name check
+    if (!soundName || soundName === 'default') return 'default';
+
+    const channelId = `reminder-${soundName}`;
+    try {
+      await Notifications.setNotificationChannelAsync(channelId, {
+        name: `Reminder (${soundName})`,
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#667EEA',
+        sound: soundName, // Android channel sound name should not have extension
+      });
+      return channelId;
+    } catch (error) {
+      console.warn(`Failed to create channel for ${soundName}, falling back to default`, error);
+      return 'default';
     }
   }
 
@@ -179,31 +182,9 @@ class NotificationService {
         await NotificationManager.updateNotificationStatus(notificationId, 'triggered');
       }
 
-      // Play custom sound if in foreground
-      if (data?.ringTone && RINGTONE_FILES[data.ringTone]) {
-        try {
-          const { sound } = await Audio.Sound.createAsync(RINGTONE_FILES[data.ringTone], {
-            shouldPlay: true,
-          });
-
-          // Handle notification duration for foreground sound
-          const settings = await this.getNotificationSettings();
-          const durationSeconds = settings.notificationDuration || 30;
-
-          if (durationSeconds > 0) {
-            setTimeout(async () => {
-              try {
-                await sound.stopAsync();
-                await sound.unloadAsync();
-              } catch (e) {
-                // Ignore error if sound already unloaded
-              }
-            }, durationSeconds * 1000);
-          }
-        } catch (audioError) {
-          // Ignore audio error
-        }
-      }
+      // Note: Custom sound playback in foreground is handled by the notification system
+      // expo-audio requires React hooks which can't be used in a service class
+      // Foreground notifications will use the system notification sound
     } catch (error) {
       console.error('Error handling notification received:', error);
     }
@@ -214,46 +195,48 @@ class NotificationService {
    */
   static async handleNotificationResponse(response) {
     try {
-      const notificationId = response.notification.request.content.data?.notificationId;
-      const actionIdentifier = response.actionIdentifier;
+      const { actionIdentifier, notification } = response;
+      const data = notification.request.content.data;
+      const notificationId = data?.notificationId;
 
       if (actionIdentifier === 'snooze') {
         // Handle Snooze
         const settings = await this.getNotificationSettings();
         const snoozeMinutes = settings.snoozeTime || 10;
 
-        // Reconstruct notification data
-        const content = response.notification.request.content;
-        const data = content.data;
+        console.log(`Snoozing notification ${notificationId} for ${snoozeMinutes} minutes`);
 
-        const notificationData = {
-          id: data.notificationId,
-          reminderId: data.reminderId,
-          title: content.title,
-          description: content.body,
-          category: data.category,
-          ringTone: data.ringTone,
-          scheduledTime: new Date(Date.now() + snoozeMinutes * 60000), // Snooze time
-        };
+        // Reschedule for later
+        const triggerDate = new Date();
+        triggerDate.setMinutes(triggerDate.getMinutes() + snoozeMinutes);
 
-        // Schedule snoozed notification
-        await this.scheduleNotification(notificationData, notificationData.scheduledTime);
+        const content = notification.request.content;
 
-        // Update status? Maybe keep as triggered or set to snoozed if we had that status
+        // Schedule one-off snooze notification
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: content.title,
+            body: `Snoozed: ${content.body}`,
+            data: { ...data, isSnoozed: true },
+            sound:
+              settings.soundEnabled && data.ringTone !== 'default'
+                ? Platform.OS === 'android'
+                  ? data.ringTone
+                  : `${data.ringTone}.wav`
+                : 'default',
+          },
+          trigger: triggerDate,
+        });
       } else if (actionIdentifier === 'complete') {
         // Handle Complete
+        console.log(`Marking notification ${notificationId} as done`);
         if (notificationId) {
           await NotificationManager.updateNotificationStatus(notificationId, 'completed');
         }
       } else {
-        // Default (tap on notification body)
-        if (notificationId) {
-          await NotificationManager.updateNotificationStatus(notificationId, 'completed');
-        }
+        // Default action (tap)
+        console.log('Notification tapped');
       }
-
-      // You can add navigation logic here based on the notification data
-      // For example: navigate to reminder details screen
     } catch (error) {
       console.error('Error handling notification response:', error);
     }
@@ -276,10 +259,9 @@ class NotificationService {
       let trigger;
       // Handle Date object or Timestamp (legacy/one-off)
       if (triggerOrDate instanceof Date || typeof triggerOrDate === 'number') {
+        // Fix: Use 'date' trigger type explicitly, which expects a Date object, NOT a timestamp number
         trigger = {
-          type: 'date',
-          date: new Date(triggerOrDate).getTime(),
-          repeats: false,
+          date: new Date(triggerOrDate),
         };
       } else if (triggerOrDate && typeof triggerOrDate === 'object') {
         // Use provided trigger configuration directly (for repeating notifications)
@@ -287,15 +269,18 @@ class NotificationService {
       } else {
         // Fallback to data.scheduledTime
         trigger = {
-          type: 'date',
-          date: new Date(notificationData.scheduledTime).getTime(),
-          repeats: false,
+          date: new Date(notificationData.scheduledTime),
         };
       }
 
-      // Get channel ID based on category
-      const channelId =
-        Platform.OS === 'android' ? notificationData.category || 'default' : undefined;
+      // Get channel ID based on sound (Android)
+      let channelId = 'default';
+      if (Platform.OS === 'android') {
+        const soundName = notificationData.ringTone;
+        if (settings.soundEnabled && soundName && soundName !== 'default') {
+          channelId = await this.ensureAndroidChannel(soundName);
+        }
+      }
 
       const notificationContent = {
         title: notificationData.title,
@@ -307,14 +292,16 @@ class NotificationService {
           ringTone: notificationData.ringTone,
         },
         sound: settings.soundEnabled
-          ? notificationData.ringTone
-            ? `${notificationData.ringTone}.wav`
+          ? notificationData.ringTone && notificationData.ringTone !== 'default'
+            ? Platform.OS === 'android'
+              ? notificationData.ringTone
+              : `${notificationData.ringTone}.wav`
             : 'default'
           : null,
         vibrate: settings.vibrationEnabled ? [0, 250, 250, 250] : [],
         priority: Notifications.AndroidNotificationPriority.HIGH,
         categoryIdentifier: 'reminder',
-        ...(channelId && { channelId }),
+        ...(Platform.OS === 'android' && { channelId }),
         ...(Platform.OS === 'android' &&
           settings.notificationDuration > 0 && {
             timeoutAfter: settings.notificationDuration * 1000,
@@ -373,11 +360,31 @@ class NotificationService {
     try {
       const scheduledIds = [];
 
-      // Handle exact mode
+      // Handle exact mode - Repeating at specific times
       if (reminder.dailyMode === 'exact') {
-        const exactTime = new Date(reminder.dailyExactDateTime);
-        const id = await this.scheduleNotification(reminder, exactTime);
-        if (id) scheduledIds.push({ notificationId: reminder.id, scheduledId: id });
+        const exactTimes = reminder.dailyExactTimes || [];
+
+        for (const timeStr of exactTimes) {
+          try {
+            const [time, period] = timeStr.split(' ');
+            const [hoursStr, minutesStr] = time.split(':');
+            let hour = parseInt(hoursStr, 10);
+            const minute = parseInt(minutesStr, 10);
+
+            if (period === 'PM' && hour !== 12) hour += 12;
+            if (period === 'AM' && hour === 12) hour = 0;
+
+            const scheduledId = await this.scheduleNotification(reminder, {
+              hour,
+              minute,
+              repeats: true,
+            });
+
+            if (scheduledId) scheduledIds.push({ notificationId: reminder.id, scheduledId });
+          } catch (err) {
+            console.error('Error scheduling exact time:', timeStr, err);
+          }
+        }
         return scheduledIds;
       }
 
@@ -821,10 +828,12 @@ class NotificationService {
    */
   static cleanup() {
     if (this.notificationListener) {
-      Notifications.removeNotificationSubscription(this.notificationListener);
+      this.notificationListener.remove();
+      this.notificationListener = null;
     }
     if (this.responseListener) {
-      Notifications.removeNotificationSubscription(this.responseListener);
+      this.responseListener.remove();
+      this.responseListener = null;
     }
   }
 }

@@ -166,6 +166,38 @@ const categories = ['Personal', 'Work', 'Health', 'Family', 'Finance', 'Shopping
    - Ensure Android Studio is installed
    - Check that an AVD is configured
 
+### Important Notes About Expo Go
+
+**Limitations in Expo Go (SDK 53+):**
+
+1. **Push Notifications:** Remote/push notifications are NOT supported in Expo Go. However, local scheduled notifications (used by this app) work fine.
+
+2. **Audio Preview:** Ringtone preview playback has limitations in Expo Go due to expo-audio restrictions. The preview button provides visual feedback only.
+
+3. **Background Notifications:** Advanced background notification features may not work as expected.
+
+**For Full Functionality:** Create a development build instead of using Expo Go:
+
+```bash
+# Install expo-dev-client
+npx expo install expo-dev-client
+
+# Create development build for Android
+npx expo run:android
+
+# Or for iOS
+npx expo run:ios
+```
+
+**What Works in Expo Go:**
+- ✅ Creating and editing reminders
+- ✅ All reminder types (Daily, Weekly, Monthly, etc.)
+- ✅ Local scheduled notifications
+- ✅ Reminder management and filtering
+- ✅ All UI features and navigation
+
+Learn more: https://docs.expo.dev/develop/development-builds/introduction/
+
 ## 🚀 Building for Production
 
 ### For iOS:

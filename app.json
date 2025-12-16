@@ -18,8 +18,7 @@
       "bundleIdentifier": "com.yourcompany.reminderapp",
       "infoPlist": {
         "NSUserNotificationUsageDescription": "This app needs to send you reminder notifications."
-      },
-      "minimumOsVersion": "13.0"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -33,8 +32,7 @@
         "WAKE_LOCK",
         "POST_NOTIFICATIONS",
         "SCHEDULE_EXACT_ALARM"
-      ],
-      "minSdkVersion": 21
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -45,10 +43,23 @@
         {
           "icon": "./assets/adaptive-icon.png",
           "color": "#667eea",
-          "sounds": []
+          "sounds": [
+            "./assets/sounds/beeper.wav",
+            "./assets/sounds/calm.wav",
+            "./assets/sounds/chord.wav",
+            "./assets/sounds/cloud.wav",
+            "./assets/sounds/glass.wav",
+            "./assets/sounds/jinja.wav",
+            "./assets/sounds/polite.wav",
+            "./assets/sounds/reverie.wav",
+            "./assets/sounds/sharp.wav",
+            "./assets/sounds/taptap.wav"
+          ]
         }
-      ]
-    ],
-    "runtimeVersion": "54.0.0"
+      ],
+      "expo-font",
+      "expo-audio",
+      "expo-asset"
+    ]
   }
 }

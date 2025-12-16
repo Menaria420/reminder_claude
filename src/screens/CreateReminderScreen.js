@@ -227,7 +227,11 @@ const CreateReminderScreen = ({ navigation, route }) => {
 
       if (reminderData.type === 'daily') {
         if (reminderData.dailyMode === 'exact') {
-          return new Date(reminderData.dailyExactDateTime);
+          if (reminderData.dailyExactTimes && reminderData.dailyExactTimes.length > 0) {
+            // Return just the count or one examples
+            return `Frequency: ${reminderData.dailyExactTimes.length} times`;
+          }
+          return 'No times set';
         }
         const startTime = new Date(reminderData.dailyStartTime);
         let next = new Date(startTime);
@@ -2832,6 +2836,7 @@ const styles = StyleSheet.create({
   timeChip: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#EEF2FF',
     paddingVertical: 6,
     paddingHorizontal: 10,
@@ -2926,25 +2931,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     marginHorizontal: -4,
   },
-  timeChip: {
-    width: '31.33%',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 8,
-    paddingVertical: 12,
-    margin: '1%',
-    alignItems: 'center',
-  },
-  timeChipActive: {
-    backgroundColor: '#10B981',
-  },
-  timeChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#374151',
-  },
-  timeChipTextActive: {
-    color: 'white',
-  },
+
   datePickerButton: {
     flexDirection: 'row',
     alignItems: 'center',

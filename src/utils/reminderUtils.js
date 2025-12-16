@@ -29,36 +29,27 @@ export const getReminderDisplayTime = (reminder) => {
           const period = hours >= 12 ? 'PM' : 'AM';
           const displayHours = hours % 12 || 12;
           const displayMinutes = minutes.toString().padStart(2, '0');
-          return `${exactTime.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${displayHours}:${displayMinutes} ${period}`;
+          return `${exactTime.toLocaleDateString([], {
+            month: 'short',
+            day: 'numeric',
+          })} at ${displayHours}:${displayMinutes} ${period}`;
         }
       }
 
       // Convert string to Date if needed (backward compatibility)
       const startTime =
         (reminder.dailyStartTime || reminder.hourlyStartTime) instanceof Date
-          ? (reminder.dailyStartTime || reminder.hourlyStartTime)
+          ? reminder.dailyStartTime || reminder.hourlyStartTime
           : new Date(reminder.dailyStartTime || reminder.hourlyStartTime);
 
       if (isNaN(startTime.getTime())) {
         return `Every ${reminder.dailyInterval || reminder.hourlyInterval || 1} hour(s)`;
       }
 
-      // Use TODAY's date with the selected time
-      let nextTime = new Date();
-      nextTime.setHours(startTime.getHours(), startTime.getMinutes(), 0, 0);
-
-      // Adjust to future
-      while (nextTime < now) {
-        nextTime.setHours(nextTime.getHours() + (reminder.dailyInterval || reminder.hourlyInterval || 1));
-      }
-
-      const hours = nextTime.getHours();
-      const minutes = nextTime.getMinutes();
-      const period = hours >= 12 ? 'PM' : 'AM';
-      const displayHours = hours % 12 || 12;
-      const displayMinutes = minutes.toString().padStart(2, '0');
-
-      return `${displayHours}:${displayMinutes} ${period}`;
+      return startTime.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
     }
 
     if (reminder.type === 'weekly') {
@@ -167,16 +158,49 @@ export const getFormattedNextTrigger = (reminder) => {
 
     if (reminder.type === 'daily' || reminder.type === 'hourly') {
       // Handle exact mode
+      // Handle exact mode
       if (reminder.dailyMode === 'exact') {
-        nextTrigger = new Date(reminder.dailyExactDateTime);
-        if (isNaN(nextTrigger.getTime())) {
-          return 'Invalid date/time';
+        const exactTimes = reminder.dailyExactTimes || [];
+        // Find next occurrence among all times
+        let nextOccurrence = null;
+
+        for (const timeStr of exactTimes) {
+          try {
+            const [time, period] = timeStr.split(' ');
+            const [hoursStr, minutesStr] = time.split(':');
+            let hour = parseInt(hoursStr, 10);
+            const minute = parseInt(minutesStr, 10);
+
+            if (period === 'PM' && hour !== 12) hour += 12;
+            if (period === 'AM' && hour === 12) hour = 0;
+
+            const potentialDate = new Date(now);
+            potentialDate.setHours(hour, minute, 0, 0);
+
+            // If time passed today, it's tomorrow
+            if (potentialDate < now) {
+              potentialDate.setDate(potentialDate.getDate() + 1);
+            }
+
+            if (!nextOccurrence || potentialDate < nextOccurrence) {
+              nextOccurrence = potentialDate;
+            }
+          } catch (e) {
+            // ignore parse error
+          }
+        }
+
+        if (nextOccurrence) {
+          nextTrigger = nextOccurrence;
+        } else {
+          // Fallback if no times or parse error
+          nextTrigger = new Date(reminder.dailyExactDateTime);
         }
       } else {
         // Convert string to Date if needed (backward compatibility)
         const startTime =
           (reminder.dailyStartTime || reminder.hourlyStartTime) instanceof Date
-            ? (reminder.dailyStartTime || reminder.hourlyStartTime)
+            ? reminder.dailyStartTime || reminder.hourlyStartTime
             : new Date(reminder.dailyStartTime || reminder.hourlyStartTime);
 
         if (isNaN(startTime.getTime())) {

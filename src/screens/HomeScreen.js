@@ -565,6 +565,18 @@ const HomeScreen = ({ navigation, route }) => {
                             style={styles.actionButtonCompact}
                             onPress={(e) => {
                               e.stopPropagation();
+                              navigation.navigate('CreateReminder', {
+                                editMode: true,
+                                reminder: item,
+                              });
+                            }}
+                          >
+                            <Icon name="edit" size={18} color="#667EEA" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.actionButtonCompact}
+                            onPress={(e) => {
+                              e.stopPropagation();
                               deleteReminder(item.id);
                             }}
                           >
