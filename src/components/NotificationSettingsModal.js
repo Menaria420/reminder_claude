@@ -34,13 +34,34 @@ const NotificationSettingsModal = ({ visible, onClose, settings, onSave }) => {
   const { isDarkMode } = useContext(ThemeContext);
   const [localSettings, setLocalSettings] = useState(settings);
 
+  // Update local settings when settings prop changes
+  React.useEffect(() => {
+    if (visible) {
+      setLocalSettings(settings);
+    }
+  }, [visible, settings]);
+
   const handleVibrate = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const updateSetting = (key, value) => {
     handleVibrate();
-    setLocalSettings((prev) => ({ ...prev, [key]: value }));
+    setLocalSettings((prev) => {
+      const updated = { ...prev, [key]: value };
+
+      // If silent mode is enabled, disable sound
+      if (key === 'silentMode' && value === true) {
+        updated.soundEnabled = false;
+      }
+
+      // If silent mode is disabled and sound was disabled by silent mode, re-enable sound
+      if (key === 'silentMode' && value === false) {
+        updated.soundEnabled = true;
+      }
+
+      return updated;
+    });
   };
 
   const handleSave = () => {
@@ -115,14 +136,16 @@ const NotificationSettingsModal = ({ visible, onClose, settings, onSave }) => {
                     key={option.value}
                     style={[
                       styles.optionButton,
+                      isDarkMode && styles.optionButtonDark,
                       localSettings.notificationDuration === option.value &&
-                        styles.optionButtonActive,
+                        (isDarkMode ? styles.optionButtonActiveDark : styles.optionButtonActive),
                     ]}
                     onPress={() => updateSetting('notificationDuration', option.value)}
                   >
                     <Text
                       style={[
                         styles.optionText,
+                        isDarkMode && styles.optionTextDark,
                         localSettings.notificationDuration === option.value &&
                           styles.optionTextActive,
                       ]}
@@ -149,13 +172,16 @@ const NotificationSettingsModal = ({ visible, onClose, settings, onSave }) => {
                     key={option.value}
                     style={[
                       styles.optionButton,
-                      localSettings.snoozeTime === option.value && styles.optionButtonActive,
+                      isDarkMode && styles.optionButtonDark,
+                      localSettings.snoozeTime === option.value &&
+                        (isDarkMode ? styles.optionButtonActiveDark : styles.optionButtonActive),
                     ]}
                     onPress={() => updateSetting('snoozeTime', option.value)}
                   >
                     <Text
                       style={[
                         styles.optionText,
+                        isDarkMode && styles.optionTextDark,
                         localSettings.snoozeTime === option.value && styles.optionTextActive,
                       ]}
                     >
@@ -375,14 +401,24 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'transparent',
   },
+  optionButtonDark: {
+    backgroundColor: '#374151',
+  },
   optionButtonActive: {
     backgroundColor: '#EEF2FF',
+    borderColor: '#667EEA',
+  },
+  optionButtonActiveDark: {
+    backgroundColor: 'rgba(102, 126, 234, 0.2)',
     borderColor: '#667EEA',
   },
   optionText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#6B7280',
+  },
+  optionTextDark: {
+    color: '#D1D5DB',
   },
   optionTextActive: {
     color: '#667EEA',

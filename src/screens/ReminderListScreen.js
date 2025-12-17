@@ -62,7 +62,27 @@ const ReminderListScreen = ({ navigation, route }) => {
         try {
           const parsed = JSON.parse(savedReminders);
           if (Array.isArray(parsed)) {
-            setReminders(parsed);
+            // Check for expired reminders and deactivate them
+            let hasChanges = false;
+            const updatedReminders = parsed.map((reminder) => {
+              if (reminder.hasExpiry && reminder.expiryDate && reminder.isActive !== false) {
+                const expiryDate = new Date(reminder.expiryDate);
+                expiryDate.setHours(23, 59, 59, 999); // End of day
+                const now = new Date();
+                if (now > expiryDate) {
+                  hasChanges = true;
+                  return { ...reminder, isActive: false };
+                }
+              }
+              return reminder;
+            });
+
+            // Save updated reminders if any expired
+            if (hasChanges) {
+              await AsyncStorage.setItem('reminders', JSON.stringify(updatedReminders));
+            }
+
+            setReminders(updatedReminders);
           } else {
             console.warn('Invalid reminders data format');
             setReminders([]);

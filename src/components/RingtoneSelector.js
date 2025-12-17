@@ -1,5 +1,5 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
-import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet, Alert } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -11,17 +11,26 @@ import { RINGTONES, RINGTONE_FILES } from '../constants/ringtones';
 const RingtoneSelector = ({ visible, onClose, selectedRingtone, onSelect }) => {
   const { isDarkMode } = useContext(ThemeContext);
   const [previewId, setPreviewId] = useState(null);
-  const soundObjectRef = useRef(null);
+  const soundRef = useRef(null);
+
+  // Configure audio mode on mount
+  useEffect(() => {
+    Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: false,
+      shouldDuckAndroid: true,
+    });
+  }, []);
 
   // Cleanup when modal closes
   useEffect(() => {
     if (!visible) {
-      setPreviewId(null);
       stopSound();
+      setPreviewId(null);
     }
   }, [visible]);
 
-  // Clean up sound on unmount
+  // Cleanup sound on unmount
   useEffect(() => {
     return () => {
       stopSound();
@@ -29,13 +38,14 @@ const RingtoneSelector = ({ visible, onClose, selectedRingtone, onSelect }) => {
   }, []);
 
   const stopSound = async () => {
-    try {
-      if (soundObjectRef.current) {
-        await soundObjectRef.current.unloadAsync();
-        soundObjectRef.current = null;
+    if (soundRef.current) {
+      try {
+        await soundRef.current.stopAsync();
+        await soundRef.current.unloadAsync();
+        soundRef.current = null;
+      } catch (error) {
+        console.log('Error stopping sound:', error);
       }
-    } catch (error) {
-      console.log('Error stopping sound', error);
     }
   };
 
@@ -48,44 +58,41 @@ const RingtoneSelector = ({ visible, onClose, selectedRingtone, onSelect }) => {
 
     // If clicking the same one, stop preview
     if (previewId === ringtoneId) {
-      setPreviewId(null);
       await stopSound();
+      setPreviewId(null);
       return;
     }
 
+    // Stop any currently playing sound
+    await stopSound();
+
     try {
-      // Stop previous sound
-      await stopSound();
+      // Load and play the sound
+      const soundFile = RINGTONE_FILES[ringtoneId];
+      if (soundFile) {
+        const { sound } = await Audio.Sound.createAsync(soundFile, { shouldPlay: true });
+        soundRef.current = sound;
 
-      // Show preview state
-      setPreviewId(ringtoneId);
+        // Show preview animation
+        setPreviewId(ringtoneId);
 
-      // Load and play new sound
-      const soundSource = RINGTONE_FILES[ringtoneId];
-      if (soundSource) {
-        // Set audio mode to allow playing even if silent switch is on (optional, but good for previews)
-        await Audio.setAudioModeAsync({
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: false,
-        });
-
-        const { sound } = await Audio.Sound.createAsync(soundSource, { shouldPlay: true });
-
-        soundObjectRef.current = sound;
-
-        // Reset preview state when playback finishes
+        // Set up playback status update to stop preview when sound finishes
         sound.setOnPlaybackStatusUpdate((status) => {
           if (status.didJustFinish) {
             setPreviewId(null);
-            sound.unloadAsync();
-            soundObjectRef.current = null;
+            stopSound();
           }
         });
+
+        // Auto-stop preview after 3 seconds as a fallback
+        setTimeout(() => {
+          setPreviewId(null);
+          stopSound();
+        }, 3000);
       }
     } catch (error) {
-      console.error('Error playing sound:', error);
+      console.log('Error playing ringtone:', error);
       setPreviewId(null);
-      Alert.alert('Error', 'Could not play audio preview');
     }
   };
 
@@ -110,12 +117,11 @@ const RingtoneSelector = ({ visible, onClose, selectedRingtone, onSelect }) => {
             </TouchableOpacity>
           </LinearGradient>
 
-          {/* Info Note for Expo Go */}
+          {/* Info Note */}
           <View style={[styles.infoNote, isDarkMode && styles.infoNoteDark]}>
-            <Icon name="info" size={16} color="#667EEA" />
+            <Icon name="volume-up" size={16} color="#667EEA" />
             <Text style={[styles.infoText, isDarkMode && styles.infoTextDark]}>
-              Preview plays here. Note: Custom notification sounds require a development build. In
-              Expo Go, notifications use the default sound.
+              Tap the play button to preview sounds. Your selected ringtone will play when notifications trigger.
             </Text>
           </View>
 

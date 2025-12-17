@@ -41,9 +41,10 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/adaptive-icon.png",
+          "icon": "./assets/icon.png",
           "color": "#667eea",
           "sounds": [
+            "./assets/sounds/default.wav",
             "./assets/sounds/beeper.wav",
             "./assets/sounds/calm.wav",
             "./assets/sounds/chord.wav",
@@ -58,7 +59,6 @@
         }
       ],
       "expo-font",
-      "expo-audio",
       "expo-asset"
     ]
   }

@@ -50,8 +50,7 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   const checkPermissions = async () => {
-    // Optional: Sync UI state with actual OS permissions?
-    // For now, we respect the user's *app* preference, but if OS is denied, we might show warning.
+    // Check permission status
   };
 
   const handleSaveNotificationSettings = async (newSettings) => {
@@ -69,7 +68,6 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   const toggleSetting = async (key) => {
-    // Logic for toggling
     const newValue = !notificationSettings[key];
 
     if (key === 'notificationsEnabled' && newValue === true) {
@@ -92,6 +90,40 @@ const SettingsScreen = ({ navigation }) => {
     setNotificationSettings(updatedSettings);
     await NotificationService.saveNotificationSettings(updatedSettings);
     NotificationService.rescheduleAllNotifications();
+  };
+
+  const handleClearAndReschedule = async () => {
+    Alert.alert(
+      'Clear & Reschedule Notifications',
+      'This will cancel all scheduled notifications and reschedule them with optimized settings. This fixes the "500 alarm limit" error.\n\nContinue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Yes, Fix It',
+          onPress: async () => {
+            try {
+              // Get count before
+              const beforeCount = (await NotificationService.getAllScheduledNotifications()).length;
+
+              // Clear and reschedule
+              await NotificationService.cancelAllNotifications();
+              await NotificationService.rescheduleAllNotifications();
+
+              // Get count after
+              const afterCount = (await NotificationService.getAllScheduledNotifications()).length;
+
+              Alert.alert(
+                'Success!',
+                `Cleared ${beforeCount} old notifications.\nRescheduled ${afterCount} new notifications.\n\nAll reminders are now optimized!`
+              );
+            } catch (error) {
+              console.error('Error clearing notifications:', error);
+              Alert.alert('Error', 'Failed to clear notifications. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleExportData = async () => {
@@ -218,9 +250,18 @@ const SettingsScreen = ({ navigation }) => {
           id: 'system',
           title: 'System Settings',
           subtitle: 'Open device notification settings',
-          icon: 'settings-cell', // or settings-applications
+          icon: 'settings-cell',
           type: 'link',
           onPress: () => Linking.openSettings(),
+        },
+        {
+          id: 'clearReschedule',
+          title: 'Fix Notification Limit',
+          subtitle: 'Clear and reschedule all (fixes 500 alarm error)',
+          icon: 'refresh',
+          iconColor: '#EF4444',
+          type: 'link',
+          onPress: handleClearAndReschedule,
         },
       ],
     },
@@ -313,7 +354,11 @@ const SettingsScreen = ({ navigation }) => {
                       },
                     ]}
                   >
-                    <Icon name={item.icon} size={20} color={item.danger ? '#EF4444' : '#667EEA'} />
+                    <Icon
+                      name={item.icon}
+                      size={20}
+                      color={item.danger ? '#EF4444' : item.iconColor || '#667EEA'}
+                    />
                   </View>
                   <View style={styles.settingText}>
                     <Text
@@ -337,13 +382,6 @@ const SettingsScreen = ({ navigation }) => {
 
                 {item.type === 'toggle' ? (
                   <View pointerEvents="none">
-                    {/* Using Icon for custom toggle look or native Switch? 
-                         Icon was used previously. Switch is more standard. 
-                         Let's use the Icon toggle to match previous design style if preferred, 
-                         OR native Switch. Native switch is better for UX.
-                         But previously used Icon toggle-on/off. 
-                         I'll use Icon to minimize UI regression, but fixing "working" aspect.
-                      */}
                     <Icon
                       name={item.value ? 'toggle-on' : 'toggle-off'}
                       size={36}

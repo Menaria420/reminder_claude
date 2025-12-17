@@ -46,9 +46,10 @@ export const getReminderDisplayTime = (reminder) => {
         return `Every ${reminder.dailyInterval || reminder.hourlyInterval || 1} hour(s)`;
       }
 
-      return startTime.toLocaleTimeString([], {
-        hour: '2-digit',
+      return startTime.toLocaleTimeString('en-US', {
+        hour: 'numeric',
         minute: '2-digit',
+        hour12: true,
       });
     }
 

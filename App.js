@@ -1,15 +1,3 @@
-import { LogBox } from 'react-native';
-
-// Suppress specific warnings
-LogBox.ignoreLogs([
-  'Expo AV has been deprecated',
-  'expo-notifications: Android Push notifications',
-  'Calling getExpoPushTokenAsync',
-  'Non-serializable values were found in the navigation state',
-  'VirtualizedList: You have a large list that is slow to update',
-  'Warning: Cannot update a component',
-]);
-
 import React, { useState, useEffect, useContext } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
@@ -34,13 +22,6 @@ import Toast from './src/components/Toast';
 import CustomAlert from './src/components/CustomAlert';
 import { showToast } from './src/components/Toast';
 import { showAlert } from './src/components/CustomAlert';
-
-// Suppress non-critical warnings
-LogBox.ignoreLogs([
-  'Non-serializable values were found in the navigation state',
-  'VirtualizedList: You have a large list that is slow to update',
-  'Warning: Cannot update a component',
-]);
 
 import * as Linking from 'expo-linking';
 
@@ -197,13 +178,10 @@ export default function App() {
   const alertRef = React.useRef(null);
 
   React.useEffect(() => {
-    // Make toast globally accessible
     if (toastRef.current) {
-      window.showToast = showToast;
       global.showToast = showToast;
     }
     if (alertRef.current) {
-      window.showAlert = showAlert;
       global.showAlert = showAlert;
     }
   }, []);

@@ -14,6 +14,7 @@ import {
   Modal,
   ActivityIndicator,
   BackHandler,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -83,6 +84,7 @@ const CreateReminderScreen = ({ navigation, route }) => {
   const [showCustomTimePicker, setShowCustomTimePicker] = useState(false);
   const [customTime, setCustomTime] = useState(new Date());
   const [fieldErrors, setFieldErrors] = useState({});
+  const [showExpiryDatePicker, setShowExpiryDatePicker] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -124,6 +126,10 @@ const CreateReminderScreen = ({ navigation, route }) => {
               date: new Date().getDate(),
               time: new Date(),
             },
+        hasExpiry: existingReminder.hasExpiry || false,
+        expiryDate: existingReminder.expiryDate
+          ? new Date(existingReminder.expiryDate)
+          : new Date(new Date().setMonth(new Date().getMonth() + 1)),
       };
     }
     return {
@@ -152,6 +158,8 @@ const CreateReminderScreen = ({ navigation, route }) => {
       notificationSound: 'default',
       ringTone: 'default',
       priority: 'normal',
+      hasExpiry: false,
+      expiryDate: new Date(new Date().setMonth(new Date().getMonth() + 1)),
       customSettings: {
         yearRepeat: 'specific',
         year: new Date().getFullYear(),
@@ -321,8 +329,9 @@ const CreateReminderScreen = ({ navigation, route }) => {
       if (reminderData.type === 'custom') {
         const { customSettings } = reminderData;
         const time = new Date(customSettings.time).toLocaleTimeString([], {
-          hour: '2-digit',
+          hour: 'numeric',
           minute: '2-digit',
+          hour12: true,
         });
         if (customSettings.dateRepeat === 'every') return `Daily at ${time}`;
         if (customSettings.monthRepeat === 'every')
@@ -525,6 +534,10 @@ const CreateReminderScreen = ({ navigation, route }) => {
           updatedAt: new Date().toISOString(),
           isActive: existingReminder.isActive, // Preserve active state
         };
+
+        // Cancel old notifications if editing
+        const NotificationService = require('../utils/NotificationService').default;
+        await NotificationService.cancelNotificationsByReminderId(existingReminder.id);
 
         // Replace the old reminder with updated one
         updatedReminders = reminders.map((r) =>
@@ -1294,8 +1307,9 @@ const CreateReminderScreen = ({ navigation, route }) => {
                       <Icon name="access-time" size={24} color="#667EEA" />
                       <Text style={[styles.timeInputText, isDarkMode && styles.timeInputTextDark]}>
                         {reminderData.dailyStartTime.toLocaleTimeString([], {
-                          hour: '2-digit',
+                          hour: 'numeric',
                           minute: '2-digit',
+                          hour12: true,
                         })}
                       </Text>
                     </View>
@@ -1475,8 +1489,9 @@ const CreateReminderScreen = ({ navigation, route }) => {
               <Text style={styles.timePickerText}>
                 Time:{' '}
                 {reminderData.fifteenDaysTime.toLocaleTimeString([], {
-                  hour: '2-digit',
+                  hour: 'numeric',
                   minute: '2-digit',
+                  hour12: true,
                 })}
               </Text>
             </TouchableOpacity>
@@ -1562,8 +1577,9 @@ const CreateReminderScreen = ({ navigation, route }) => {
               <Text style={styles.timePickerText}>
                 Time:{' '}
                 {reminderData.monthlyTime.toLocaleTimeString([], {
-                  hour: '2-digit',
+                  hour: 'numeric',
                   minute: '2-digit',
+                  hour12: true,
                 })}
               </Text>
             </TouchableOpacity>
@@ -1848,8 +1864,9 @@ const CreateReminderScreen = ({ navigation, route }) => {
                   <Text style={styles.largeTimeText}>
                     {reminderData.customSettings.time
                       ? new Date(reminderData.customSettings.time).toLocaleTimeString([], {
-                          hour: '2-digit',
+                          hour: 'numeric',
                           minute: '2-digit',
+                          hour12: true,
                         })
                       : 'Select Time'}
                   </Text>
@@ -1877,14 +1894,17 @@ const CreateReminderScreen = ({ navigation, route }) => {
         Additional Options
       </Text>
 
-      <TouchableOpacity style={styles.optionCard} onPress={() => setShowRingtoneSelector(true)}>
-        <View style={styles.optionIcon}>
+      <TouchableOpacity
+        style={[styles.optionCard, isDarkMode && styles.optionCardDark]}
+        onPress={() => setShowRingtoneSelector(true)}
+      >
+        <View style={[styles.optionIcon, isDarkMode && styles.optionIconDark]}>
           <Icon name="music-note" size={20} color="#667EEA" />
         </View>
         <View style={styles.optionContent}>
-          <Text style={styles.optionTitle}>Ringtone</Text>
+          <Text style={[styles.optionTitle, isDarkMode && styles.optionTitleDark]}>Ringtone</Text>
           <View style={styles.ringtoneDisplay}>
-            <Text style={styles.ringtoneValue}>
+            <Text style={[styles.ringtoneValue, isDarkMode && styles.ringtoneValueDark]}>
               {reminderData.ringTone === 'default'
                 ? 'Use Default'
                 : reminderData.ringTone.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
@@ -1894,18 +1914,19 @@ const CreateReminderScreen = ({ navigation, route }) => {
         </View>
       </TouchableOpacity>
 
-      <View style={styles.optionCard}>
-        <View style={styles.optionIcon}>
+      <View style={[styles.optionCard, isDarkMode && styles.optionCardDark]}>
+        <View style={[styles.optionIcon, isDarkMode && styles.optionIconDark]}>
           <Icon name="flag" size={20} color="#F59E0B" />
         </View>
         <View style={styles.optionContent}>
-          <Text style={styles.optionTitle}>Priority</Text>
+          <Text style={[styles.optionTitle, isDarkMode && styles.optionTitleDark]}>Priority</Text>
           <View style={styles.priorityOptions}>
             {['Low', 'Normal', 'High', 'Urgent'].map((priority) => (
               <TouchableOpacity
                 key={priority}
                 style={[
                   styles.priorityChip,
+                  isDarkMode && styles.priorityChipDark,
                   reminderData.priority === priority.toLowerCase() && styles.priorityChipActive,
                   reminderData.priority === priority.toLowerCase() && {
                     backgroundColor:
@@ -1926,6 +1947,7 @@ const CreateReminderScreen = ({ navigation, route }) => {
                 <Text
                   style={[
                     styles.priorityChipText,
+                    isDarkMode && styles.priorityChipTextDark,
                     reminderData.priority === priority.toLowerCase() &&
                       styles.priorityChipTextActive,
                   ]}
@@ -1935,6 +1957,50 @@ const CreateReminderScreen = ({ navigation, route }) => {
               </TouchableOpacity>
             ))}
           </View>
+        </View>
+      </View>
+
+      <View style={[styles.optionCard, isDarkMode && styles.optionCardDark]}>
+        <View style={[styles.optionIcon, isDarkMode && styles.optionIconDark]}>
+          <Icon name="event-busy" size={20} color="#EF4444" />
+        </View>
+        <View style={styles.optionContent}>
+          <View style={styles.expiryHeader}>
+            <Text style={[styles.optionTitle, isDarkMode && styles.optionTitleDark]}>
+              Add Expiry
+            </Text>
+            <Switch
+              value={reminderData.hasExpiry}
+              onValueChange={(value) => {
+                handleVibrate();
+                setReminderData({ ...reminderData, hasExpiry: value });
+              }}
+              trackColor={{ false: '#D1D5DB', true: '#667EEA' }}
+              thumbColor={reminderData.hasExpiry ? '#ffffff' : '#f4f3f4'}
+            />
+          </View>
+          {reminderData.hasExpiry && (
+            <View style={styles.expiryDateContainer}>
+              <Text style={[styles.expiryDescription, isDarkMode && styles.expiryDescriptionDark]}>
+                Reminder will be deactivated after this date
+              </Text>
+              <TouchableOpacity
+                style={[styles.expiryDateButton, isDarkMode && styles.expiryDateButtonDark]}
+                onPress={() => setShowExpiryDatePicker(true)}
+              >
+                <Icon name="calendar-today" size={18} color="#667EEA" />
+                <Text style={[styles.expiryDateText, isDarkMode && styles.expiryDateTextDark]}>
+                  {reminderData.expiryDate
+                    ? new Date(reminderData.expiryDate).toLocaleDateString([], {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })
+                    : 'Select Date'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </View>
 
@@ -2056,9 +2122,10 @@ const CreateReminderScreen = ({ navigation, route }) => {
               if (reminderData.type === 'daily') {
                 // Check if in exact mode - add to times array
                 if (reminderData.dailyMode === 'exact') {
-                  const timeString = selectedTime.toLocaleTimeString([], {
-                    hour: '2-digit',
+                  const timeString = selectedTime.toLocaleTimeString('en-US', {
+                    hour: 'numeric',
                     minute: '2-digit',
+                    hour12: true,
                   });
                   // Only add if not already in list
                   if (!reminderData.dailyExactTimes.includes(timeString)) {
@@ -2258,6 +2325,22 @@ const CreateReminderScreen = ({ navigation, route }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Expiry Date Picker */}
+      {showExpiryDatePicker && (
+        <DateTimePicker
+          value={reminderData.expiryDate}
+          mode="date"
+          display="default"
+          minimumDate={new Date()}
+          onChange={(event, selectedDate) => {
+            setShowExpiryDatePicker(false);
+            if (selectedDate) {
+              setReminderData({ ...reminderData, expiryDate: selectedDate });
+            }
+          }}
+        />
+      )}
 
       {/* Ringtone Selector Modal */}
       <RingtoneSelector
@@ -3272,6 +3355,11 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 10,
   },
+  optionCardDark: {
+    backgroundColor: '#1a1f3a',
+    borderColor: '#3a4560',
+    borderWidth: 1,
+  },
   intervalButton: {
     width: 36,
     height: 36,
@@ -3294,6 +3382,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 10,
   },
+  optionIconDark: {
+    backgroundColor: '#2a2f4a',
+  },
   optionContent: {
     flex: 1,
   },
@@ -3302,6 +3393,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#111827',
     marginBottom: 8,
+  },
+  optionTitleDark: {
+    color: '#E5E7EB',
   },
   ringtoneDisplay: {
     flexDirection: 'row',
@@ -3312,6 +3406,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#667EEA',
     fontWeight: '600',
+  },
+  ringtoneValueDark: {
+    color: '#8B9EFF',
   },
   soundOptions: {
     flexDirection: 'row',
@@ -3366,6 +3463,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 6,
   },
+  priorityChipDark: {
+    backgroundColor: '#2a2f4a',
+    borderColor: '#3a4560',
+    borderWidth: 1,
+  },
   priorityChipActive: {
     backgroundColor: '#667EEA',
   },
@@ -3374,8 +3476,48 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#374151',
   },
+  priorityChipTextDark: {
+    color: '#9CA3AF',
+  },
   priorityChipTextActive: {
     color: 'white',
+  },
+  expiryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  expiryDateContainer: {
+    marginTop: 8,
+  },
+  expiryDescription: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 12,
+  },
+  expiryDescriptionDark: {
+    color: '#9CA3AF',
+  },
+  expiryDateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 12,
+  },
+  expiryDateButtonDark: {
+    backgroundColor: '#374151',
+  },
+  expiryDateText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  expiryDateTextDark: {
+    color: '#E5E7EB',
   },
   summaryCard: {
     backgroundColor: '#F0F4FF',
