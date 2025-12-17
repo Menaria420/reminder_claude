@@ -10,6 +10,7 @@ import FilterModal from '../components/FilterModal';
 import { applyAllFilters, applySorting, getActiveFilterCount } from '../utils/filterUtils';
 import { showSuccessToast, showErrorToast, showDeleteConfirm } from '../utils/ToastManager';
 import { getReminderDisplayTime, getFormattedNextTrigger } from '../utils/reminderUtils';
+import { restoreReminderFromStorage } from '../utils/timezoneFix';
 
 const ReminderListScreen = ({ navigation, route }) => {
   const { isDarkMode } = useContext(ThemeContext);
@@ -65,16 +66,19 @@ const ReminderListScreen = ({ navigation, route }) => {
             // Check for expired reminders and deactivate them
             let hasChanges = false;
             const updatedReminders = parsed.map((reminder) => {
-              if (reminder.hasExpiry && reminder.expiryDate && reminder.isActive !== false) {
-                const expiryDate = new Date(reminder.expiryDate);
+              // Restore reminder from storage (fixes timezone)
+              const restored = restoreReminderFromStorage(reminder);
+
+              if (restored.hasExpiry && restored.expiryDate && restored.isActive !== false) {
+                const expiryDate = new Date(restored.expiryDate);
                 expiryDate.setHours(23, 59, 59, 999); // End of day
                 const now = new Date();
                 if (now > expiryDate) {
                   hasChanges = true;
-                  return { ...reminder, isActive: false };
+                  return { ...restored, isActive: false };
                 }
               }
-              return reminder;
+              return restored;
             });
 
             // Save updated reminders if any expired

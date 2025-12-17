@@ -9,7 +9,6 @@ export const RINGTONE_FILES = {
   polite: require('../../assets/sounds/polite.wav'),
   reverie: require('../../assets/sounds/reverie.wav'),
   sharp: require('../../assets/sounds/sharp.wav'),
-  taptap: require('../../assets/sounds/taptap.wav'),
 };
 
 export const RINGTONES = [
@@ -55,12 +54,6 @@ export const RINGTONES = [
     name: 'Reverie',
     icon: 'nights-stay',
     description: 'Dreamy ambience',
-  },
-  {
-    id: 'taptap',
-    name: 'Tap Tap',
-    icon: 'touch-app',
-    description: 'Subtle interaction',
   },
   {
     id: 'beeper',

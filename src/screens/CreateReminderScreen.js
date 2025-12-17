@@ -26,6 +26,7 @@ import { CATEGORIES } from '../constants/categories';
 import RingtoneSelector from '../components/RingtoneSelector';
 import NotificationService from '../utils/NotificationService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { prepareReminderForStorage, restoreReminderFromStorage } from '../utils/timezoneFix';
 
 const { width } = Dimensions.get('window');
 
@@ -91,45 +92,14 @@ const CreateReminderScreen = ({ navigation, route }) => {
 
   const getInitialState = () => {
     if (editMode && existingReminder) {
+      // Restore the reminder from storage format (fixes timezone issues)
+      const restored = restoreReminderFromStorage(existingReminder);
       return {
-        ...existingReminder,
-        // Ensure dates are Date objects
-        dailyStartTime:
-          existingReminder.dailyStartTime || existingReminder.hourlyStartTime
-            ? new Date(existingReminder.dailyStartTime || existingReminder.hourlyStartTime)
-            : new Date(),
-        dailyInterval: existingReminder.dailyInterval || existingReminder.hourlyInterval || 1,
-        dailyMode: existingReminder.dailyMode || 'interval',
-        dailyExactDateTime: existingReminder.dailyExactDateTime
-          ? new Date(existingReminder.dailyExactDateTime)
-          : new Date(),
-        fifteenDaysStart: existingReminder.fifteenDaysStart
-          ? new Date(existingReminder.fifteenDaysStart)
-          : new Date(),
-        fifteenDaysTime: existingReminder.fifteenDaysTime
-          ? new Date(existingReminder.fifteenDaysTime)
-          : new Date(),
-        monthlyTime: existingReminder.monthlyTime
-          ? new Date(existingReminder.monthlyTime)
-          : new Date(),
-        customSettings: existingReminder.customSettings
-          ? {
-              ...existingReminder.customSettings,
-              time: new Date(existingReminder.customSettings.time),
-            }
-          : {
-              yearRepeat: 'specific',
-              year: new Date().getFullYear(),
-              monthRepeat: 'specific',
-              month: new Date().getMonth() + 1,
-              dateRepeat: 'specific',
-              date: new Date().getDate(),
-              time: new Date(),
-            },
-        hasExpiry: existingReminder.hasExpiry || false,
-        expiryDate: existingReminder.expiryDate
-          ? new Date(existingReminder.expiryDate)
-          : new Date(new Date().setMonth(new Date().getMonth() + 1)),
+        ...restored,
+        // Ensure backward compatibility for old data
+        dailyInterval: restored.dailyInterval || restored.hourlyInterval || 1,
+        dailyMode: restored.dailyMode || 'interval',
+        hasExpiry: restored.hasExpiry || false,
       };
     }
     return {
@@ -527,13 +497,13 @@ const CreateReminderScreen = ({ navigation, route }) => {
 
       if (editMode && existingReminder) {
         // Update existing reminder - preserve ID and createdAt
-        updatedReminder = {
+        updatedReminder = prepareReminderForStorage({
           ...reminderData,
           id: existingReminder.id,
           createdAt: existingReminder.createdAt,
           updatedAt: new Date().toISOString(),
-          isActive: existingReminder.isActive, // Preserve active state
-        };
+          isActive: existingReminder.isActive,
+        });
 
         // Cancel old notifications if editing
         const NotificationService = require('../utils/NotificationService').default;
@@ -545,12 +515,12 @@ const CreateReminderScreen = ({ navigation, route }) => {
         );
       } else {
         // Create new reminder with unique ID and timestamp
-        updatedReminder = {
+        updatedReminder = prepareReminderForStorage({
           id: `reminder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           ...reminderData,
           createdAt: new Date().toISOString(),
           isActive: true,
-        };
+        });
 
         // Add new reminder
         updatedReminders = [...reminders, updatedReminder];
