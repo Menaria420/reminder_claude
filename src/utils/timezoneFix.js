@@ -181,3 +181,103 @@ export const restoreReminderFromStorage = (storedReminder) => {
 
   return restored;
 };
+
+/**
+ * Migrate old reminders to new timezone-safe format
+ * This converts existing reminders that use full Date objects to the new format
+ */
+export const migrateOldRemindersToNewFormat = (oldReminders) => {
+  if (!Array.isArray(oldReminders)) return oldReminders;
+
+  return oldReminders.map((reminder) => {
+    // Check if reminder needs migration (has old Date-based fields)
+    const needsMigration =
+      (reminder.dailyStartTime &&
+        typeof reminder.dailyStartTime === 'string' &&
+        !reminder.dailyStartTime_hours) ||
+      (reminder.monthlyTime &&
+        typeof reminder.monthlyTime === 'string' &&
+        !reminder.monthlyTime_hours) ||
+      (reminder.fifteenDaysTime &&
+        typeof reminder.fifteenDaysTime === 'string' &&
+        !reminder.fifteenDaysTime_hours) ||
+      (reminder.hourlyStartTime && typeof reminder.hourlyStartTime === 'string');
+
+    if (!needsMigration) {
+      return reminder; // Already in new format or no dates to migrate
+    }
+
+    console.log(`Migrating reminder: ${reminder.title || reminder.id}`);
+
+    // Convert old format to new format
+    const migrated = { ...reminder };
+
+    // Migrate dailyStartTime or hourlyStartTime (old field name)
+    const oldStartTime = migrated.dailyStartTime || migrated.hourlyStartTime;
+    if (oldStartTime && typeof oldStartTime === 'string') {
+      const date = new Date(oldStartTime);
+      if (!isNaN(date.getTime())) {
+        migrated.dailyStartTime_hours = date.getHours();
+        migrated.dailyStartTime_minutes = date.getMinutes();
+        delete migrated.dailyStartTime;
+        delete migrated.hourlyStartTime;
+      }
+    }
+
+    // Migrate dailyExactDateTime
+    if (migrated.dailyExactDateTime && typeof migrated.dailyExactDateTime === 'string') {
+      const date = new Date(migrated.dailyExactDateTime);
+      if (!isNaN(date.getTime())) {
+        migrated.dailyExactDateTime_hours = date.getHours();
+        migrated.dailyExactDateTime_minutes = date.getMinutes();
+        delete migrated.dailyExactDateTime;
+      }
+    }
+
+    // Migrate fifteenDaysTime
+    if (migrated.fifteenDaysTime && typeof migrated.fifteenDaysTime === 'string') {
+      const date = new Date(migrated.fifteenDaysTime);
+      if (!isNaN(date.getTime())) {
+        migrated.fifteenDaysTime_hours = date.getHours();
+        migrated.fifteenDaysTime_minutes = date.getMinutes();
+        delete migrated.fifteenDaysTime;
+      }
+    }
+
+    // Migrate monthlyTime
+    if (migrated.monthlyTime && typeof migrated.monthlyTime === 'string') {
+      const date = new Date(migrated.monthlyTime);
+      if (!isNaN(date.getTime())) {
+        migrated.monthlyTime_hours = date.getHours();
+        migrated.monthlyTime_minutes = date.getMinutes();
+        delete migrated.monthlyTime;
+      }
+    }
+
+    // Migrate custom settings time
+    if (
+      migrated.customSettings &&
+      migrated.customSettings.time &&
+      typeof migrated.customSettings.time === 'string'
+    ) {
+      const date = new Date(migrated.customSettings.time);
+      if (!isNaN(date.getTime())) {
+        migrated.customSettings = {
+          ...migrated.customSettings,
+          time_hours: date.getHours(),
+          time_minutes: date.getMinutes(),
+        };
+        delete migrated.customSettings.time;
+      }
+    }
+
+    // Migrate hourlyInterval to dailyInterval (field name change)
+    if (migrated.hourlyInterval && !migrated.dailyInterval) {
+      migrated.dailyInterval = migrated.hourlyInterval;
+      delete migrated.hourlyInterval;
+    }
+
+    console.log(`✅ Migrated: ${reminder.title || reminder.id}`);
+    return migrated;
+  });
+};

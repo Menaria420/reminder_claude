@@ -25,7 +25,7 @@ import {
   showDeleteConfirm,
 } from '../utils/ToastManager';
 import { getReminderDisplayTime, getFormattedNextTrigger } from '../utils/reminderUtils';
-import { restoreReminderFromStorage } from '../utils/timezoneFix';
+import { restoreReminderFromStorage, migrateOldRemindersToNewFormat } from '../utils/timezoneFix';
 
 const { width } = Dimensions.get('window');
 
@@ -60,9 +60,21 @@ const HomeScreen = ({ navigation, route }) => {
         try {
           const parsed = JSON.parse(savedReminders);
           if (Array.isArray(parsed)) {
-            // Check for expired reminders and deactivate them
+            // MIGRATE OLD REMINDERS TO NEW FORMAT
+            const migrated = migrateOldRemindersToNewFormat(parsed);
+
+            // Save migrated data back if migration occurred
+            let dataToSave = migrated;
             let hasChanges = false;
-            const updatedReminders = parsed.map((reminder) => {
+
+            // Check if migration changed anything
+            if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
+              hasChanges = true;
+              console.log('🔄 Migrated old reminders to timezone-safe format');
+            }
+
+            // Check for expired reminders and deactivate them
+            const updatedReminders = migrated.map((reminder) => {
               // Restore reminder from storage (fixes timezone)
               const restored = restoreReminderFromStorage(reminder);
 
@@ -78,9 +90,10 @@ const HomeScreen = ({ navigation, route }) => {
               return restored;
             });
 
-            // Save updated reminders if any expired
+            // Save updated/migrated reminders if any changes
             if (hasChanges) {
               await AsyncStorage.setItem('reminders', JSON.stringify(updatedReminders));
+              console.log('✅ Saved migrated/updated reminders');
             }
 
             setReminders(updatedReminders);
@@ -541,6 +554,45 @@ const HomeScreen = ({ navigation, route }) => {
                           {getFormattedNextTrigger(item)}
                         </Text>
                       </View>
+
+                      {/* Expiry Date - If Set */}
+                      {item.hasExpiry && item.expiryDate && (
+                        <View style={[styles.expiryRow, isDarkMode && styles.expiryRowDark]}>
+                          <Icon name="event-busy" size={12} color="#EF4444" />
+                          <Text style={[styles.expiryText, isDarkMode && styles.expiryTextDark]}>
+                            Expires:{' '}
+                            {new Date(item.expiryDate).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })}
+                          </Text>
+                          {(() => {
+                            const now = new Date();
+                            const expiry = new Date(item.expiryDate);
+                            const daysUntilExpiry = Math.ceil(
+                              (expiry - now) / (1000 * 60 * 60 * 24)
+                            );
+
+                            if (daysUntilExpiry <= 7 && daysUntilExpiry > 0) {
+                              return (
+                                <View style={styles.expiryWarningBadge}>
+                                  <Text style={styles.expiryWarningText}>
+                                    {daysUntilExpiry}d left
+                                  </Text>
+                                </View>
+                              );
+                            } else if (daysUntilExpiry <= 0) {
+                              return (
+                                <View style={styles.expiredBadge}>
+                                  <Text style={styles.expiredText}>EXPIRED</Text>
+                                </View>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </View>
+                      )}
 
                       {/* Bottom Row: Badges + Actions */}
                       <View style={styles.bottomRow}>
@@ -1205,6 +1257,52 @@ const styles = StyleSheet.create({
   },
   triggerTextDark: {
     color: '#93C5FD',
+  },
+  expiryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+    marginTop: 4,
+  },
+  expiryRowDark: {
+    backgroundColor: '#422006',
+  },
+  expiryText: {
+    fontSize: 11,
+    color: '#92400E',
+    fontWeight: '600',
+    flex: 1,
+  },
+  expiryTextDark: {
+    color: '#FCD34D',
+  },
+  expiryWarningBadge: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  expiryWarningText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: 'white',
+    letterSpacing: 0.3,
+  },
+  expiredBadge: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  expiredText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: 'white',
+    letterSpacing: 0.3,
   },
   cardHeader: {
     flexDirection: 'row',

@@ -93,7 +93,41 @@ const CreateReminderScreen = ({ navigation, route }) => {
   const getInitialState = () => {
     if (editMode && existingReminder) {
       // Restore the reminder from storage format (fixes timezone issues)
-      const restored = restoreReminderFromStorage(existingReminder);
+      let restored = restoreReminderFromStorage(existingReminder);
+
+      // React Navigation serializes Date objects to strings when passing params
+      // We need to ensure all date fields are actual Date objects for DateTimePicker
+      const ensureDateObject = (value) => {
+        if (!value) return new Date();
+        if (value instanceof Date) return value;
+        // Handle serialized dates from navigation params
+        const date = new Date(value);
+        return isNaN(date.getTime()) ? new Date() : date;
+      };
+
+      // Ensure all date fields are Date objects, not strings
+      if (restored.dailyStartTime) {
+        restored.dailyStartTime = ensureDateObject(restored.dailyStartTime);
+      }
+      if (restored.dailyExactDateTime) {
+        restored.dailyExactDateTime = ensureDateObject(restored.dailyExactDateTime);
+      }
+      if (restored.fifteenDaysStart) {
+        restored.fifteenDaysStart = ensureDateObject(restored.fifteenDaysStart);
+      }
+      if (restored.fifteenDaysTime) {
+        restored.fifteenDaysTime = ensureDateObject(restored.fifteenDaysTime);
+      }
+      if (restored.monthlyTime) {
+        restored.monthlyTime = ensureDateObject(restored.monthlyTime);
+      }
+      if (restored.expiryDate) {
+        restored.expiryDate = ensureDateObject(restored.expiryDate);
+      }
+      if (restored.customSettings && restored.customSettings.time) {
+        restored.customSettings.time = ensureDateObject(restored.customSettings.time);
+      }
+
       return {
         ...restored,
         // Ensure backward compatibility for old data

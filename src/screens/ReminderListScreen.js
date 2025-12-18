@@ -10,7 +10,7 @@ import FilterModal from '../components/FilterModal';
 import { applyAllFilters, applySorting, getActiveFilterCount } from '../utils/filterUtils';
 import { showSuccessToast, showErrorToast, showDeleteConfirm } from '../utils/ToastManager';
 import { getReminderDisplayTime, getFormattedNextTrigger } from '../utils/reminderUtils';
-import { restoreReminderFromStorage } from '../utils/timezoneFix';
+import { restoreReminderFromStorage, migrateOldRemindersToNewFormat } from '../utils/timezoneFix';
 
 const ReminderListScreen = ({ navigation, route }) => {
   const { isDarkMode } = useContext(ThemeContext);
@@ -63,9 +63,17 @@ const ReminderListScreen = ({ navigation, route }) => {
         try {
           const parsed = JSON.parse(savedReminders);
           if (Array.isArray(parsed)) {
-            // Check for expired reminders and deactivate them
+            // MIGRATE OLD REMINDERS TO NEW FORMAT
+            const migrated = migrateOldRemindersToNewFormat(parsed);
             let hasChanges = false;
-            const updatedReminders = parsed.map((reminder) => {
+
+            // Check if migration changed anything
+            if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
+              hasChanges = true;
+            }
+
+            // Check for expired reminders and deactivate them
+            const updatedReminders = migrated.map((reminder) => {
               // Restore reminder from storage (fixes timezone)
               const restored = restoreReminderFromStorage(reminder);
 
@@ -81,7 +89,7 @@ const ReminderListScreen = ({ navigation, route }) => {
               return restored;
             });
 
-            // Save updated reminders if any expired
+            // Save updated/migrated reminders if any changes
             if (hasChanges) {
               await AsyncStorage.setItem('reminders', JSON.stringify(updatedReminders));
             }
@@ -250,6 +258,46 @@ const ReminderListScreen = ({ navigation, route }) => {
             {getFormattedNextTrigger(item)}
           </Text>
         </View>
+
+        {/* Expiry Date - If Set */}
+        {item.hasExpiry && item.expiryDate && (
+          <View style={[styles.expiryInfoBox, isDarkMode && styles.expiryInfoBoxDark]}>
+            <Icon name="event-busy" size={16} color="#EF4444" />
+            <Text style={[styles.expiryInfoText, isDarkMode && styles.expiryInfoTextDark]}>
+              Expires:{' '}
+              {new Date(item.expiryDate).toLocaleDateString('en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })}
+            </Text>
+            {(() => {
+              const now = new Date();
+              const expiry = new Date(item.expiryDate);
+              const daysUntilExpiry = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
+
+              if (daysUntilExpiry <= 7 && daysUntilExpiry > 0) {
+                return (
+                  <View style={styles.expiryWarningBadge}>
+                    <Icon name="warning" size={10} color="white" />
+                    <Text style={styles.expiryWarningText}>
+                      {daysUntilExpiry} day{daysUntilExpiry !== 1 ? 's' : ''} left
+                    </Text>
+                  </View>
+                );
+              } else if (daysUntilExpiry <= 0) {
+                return (
+                  <View style={styles.expiredBadge}>
+                    <Icon name="error" size={10} color="white" />
+                    <Text style={styles.expiredText}>EXPIRED</Text>
+                  </View>
+                );
+              }
+              return null;
+            })()}
+          </View>
+        )}
 
         {/* Additional Info Row */}
         <View style={styles.infoRow}>
@@ -728,6 +776,58 @@ const styles = StyleSheet.create({
   },
   triggerInfoTextDark: {
     color: '#93C5FD',
+  },
+  expiryInfoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 8,
+    gap: 8,
+  },
+  expiryInfoBoxDark: {
+    backgroundColor: '#422006',
+  },
+  expiryInfoText: {
+    fontSize: 13,
+    color: '#92400E',
+    fontWeight: '600',
+    flex: 1,
+  },
+  expiryInfoTextDark: {
+    color: '#FCD34D',
+  },
+  expiryWarningBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  expiryWarningText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'white',
+    letterSpacing: 0.3,
+  },
+  expiredBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  expiredText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'white',
+    letterSpacing: 0.3,
   },
   infoRow: {
     flexDirection: 'row',
